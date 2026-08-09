@@ -3,10 +3,10 @@
 职责:
 - **文件名解析**: 优先使用 PTN（`reference/parse-torrent-name`，若可导入），
   否则回退到内置正则解析器，提取 title / year / season / episode / group /
-  resolution / quality / codec。
+  quality / codec。**分辨率绝不通过文件名判定**。
 - **分辨率实测**: ``probe_resolution()`` 调用 ``ffprobe`` 读取真实视频流
-  宽高（如 ``1920x1080``），失败（无 ffprobe / 非视频 / 读取错误）时回退到
-  文件名推断，绝不因探测失败而中断流程。
+  宽高（如 ``1920x1080``），是 ``resolution`` 字段的唯一来源；探测失败
+  （无 ffprobe / 非视频 / 读取错误）时该字段保持 ``None``，绝不回退文件名推断。
 
 输出统一的 :class:`MediaInfo` 数据对象，供 providers（TMDB 查询）与
 expression_engine（格式化）消费。
@@ -58,7 +58,7 @@ class MediaInfo:
     quality: Optional[str] = None
     codec: Optional[str] = None
     # 来源标记：title_source ∈ {ptn, regex, none}
-    # resolution_source ∈ {ffprobe, filename, none}
+    # resolution_source ∈ {ffprobe, none}（分辨率仅由 ffprobe 实测，不回退文件名）
     title_source: str = "none"
     resolution_source: str = "none"
     extra: Dict[str, object] = field(default_factory=dict)
@@ -115,14 +115,11 @@ def _regex_parse(name: str, fullname: str) -> MediaInfo:
     base = os.path.splitext(name)[0]
     used: list = []
 
-    # 先提取分辨率并记录其原文，避免 "1920x1080" 中的 1920 被误认作年份
+    # 仅定位分辨率文本，用于 (1) 防止 "1920x1080" 中的 1920 被误认作年份、
+    # (2) 从 title 中剔除。分辨率一律以 ffprobe 实测为准，不采信文件名。
     res_text = ""
     m = _RESOLUTION_RE.search(base)
     if m:
-        if m.group(1) and m.group(2):
-            info.resolution = f"{m.group(1)}x{m.group(2)}"
-        elif m.group(3):
-            info.resolution = f"{m.group(3)}p"
         res_text = m.group()
         used.append(res_text)
 
@@ -189,7 +186,6 @@ def extract_from_filename(name: str) -> MediaInfo:
                 info.season = _to_int(parts.get("season"))
                 info.episode = _to_int(parts.get("episode"))
                 info.group = str(parts["group"]).strip() if parts.get("group") else None
-                info.resolution = str(parts["resolution"]) if parts.get("resolution") else None
                 info.quality = str(parts["quality"]) if parts.get("quality") else None
                 info.codec = str(parts["codec"]) if parts.get("codec") else None
                 return info
@@ -236,8 +232,9 @@ def probe_resolution(path: str, timeout: float = 5.0) -> Optional[str]:
 def extract_media_info(path: str, prefer_probe: bool = True) -> MediaInfo:
     """从文件路径提取完整媒体信息。
 
-    - ``prefer_probe=True``（默认）：先 ffprobe 实测分辨率，失败回退文件名推断。
-    - 返回的 :class:`MediaInfo` 含 path 与来源标记。
+    - 分辨率字段**只**来自 ffprobe 实测；探测失败时保持 ``None``，
+      不会用文件名推断（``prefer_probe`` 仅控制是否尝试实测，保留以便
+      调用方跳过 IO 探测）。
     """
     info = extract_from_filename(path)
     info.path = path
@@ -247,7 +244,7 @@ def extract_media_info(path: str, prefer_probe: bool = True) -> MediaInfo:
             info.resolution = real
             info.resolution_source = "ffprobe"
         else:
-            info.resolution_source = "filename" if info.resolution else "none"
+            info.resolution_source = "none"
     else:
-        info.resolution_source = "filename" if info.resolution else "none"
+        info.resolution_source = "none"
     return info
