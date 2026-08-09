@@ -37,6 +37,7 @@ Desktop.ini
 .DS_Store
 
 reference/
+test/
 
 # ========================
 # Runtime data (src/db) — 本地配置与运行数据不入库
