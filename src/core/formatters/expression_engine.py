@@ -29,6 +29,8 @@ KNOWN_TOKENS: Set[str] = {
     "season", "episode", "group", "resolution",
     "quality", "codec", "audio", "container", "size",
     "name", "folder", "ext",
+    # 音乐标签 token
+    "artist", "album", "genre", "track",
 }
 
 

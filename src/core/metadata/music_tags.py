@@ -72,7 +72,9 @@ def split_artists(text: Union[str, List[str], None]) -> List[str]:
     if text is None:
         return []
     if isinstance(text, list):
-        pieces = [str(x) for x in text]
+        pieces: List[str] = []
+        for x in text:
+            pieces.extend(re.split(r"[、,，/;；]", str(x)))
     else:
         pieces = re.split(r"[、,，/;；]", str(text))
     result: List[str] = []
