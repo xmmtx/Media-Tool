@@ -2,6 +2,7 @@
 
 from .config_store import ConfigStore
 from .json_store import JsonStore
+from .manual_queue_store import ManualQueueStore
 from .subgroup_store import SubgroupStore
 
-__all__ = ["JsonStore", "ConfigStore", "SubgroupStore"]
+__all__ = ["JsonStore", "ConfigStore", "SubgroupStore", "ManualQueueStore"]

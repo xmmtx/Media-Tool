@@ -37,3 +37,10 @@ Desktop.ini
 .DS_Store
 
 reference/
+
+# ========================
+# Runtime data (src/db) — 本地配置与运行数据不入库
+# ========================
+src/db/config.json
+src/db/subgroups.json
+src/db/manual_queue.json

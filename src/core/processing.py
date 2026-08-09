@@ -21,9 +21,9 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
 try:
-    from ..db import ConfigStore, SubgroupStore  # src 作为顶层包运行时
+    from ..db import ConfigStore, ManualQueueStore, SubgroupStore  # src 作为顶层包运行时
 except ImportError:  # src 作为 sys.path 根运行时
-    from db import ConfigStore, SubgroupStore  # type: ignore
+    from db import ConfigStore, ManualQueueStore, SubgroupStore  # type: ignore
 from .extractors.media_extractor import (
     MediaInfo,
     extract_from_filename,
@@ -95,7 +95,7 @@ class Processor:
     """批处理编排器（持有配置/存储/提供者/文件操作器）。"""
 
     def __init__(self, config=None, subgroup_store=None, operator=None,
-                 language: Optional[str] = None) -> None:
+                 language: Optional[str] = None, manual_store=None) -> None:
         self.config = config or ConfigStore()
         self.subgroups = subgroup_store or SubgroupStore()
         self.operator = operator or FileOperator(
@@ -104,6 +104,7 @@ class Processor:
         self.language = language or str(self.config.get("language", "zh-CN") or "zh-CN")
         self.tmdb = TMDBProvider(self.config)
         self.llm = LlmSubgroupProvider(self.config)
+        self.manual_store = manual_store if manual_store is not None else ManualQueueStore()
         self.manual_queue: List[QueueItem] = []
 
     # ── 对外入口 ──────────────────────────────────────────────────────────
@@ -137,6 +138,7 @@ class Processor:
                   forced_group: Optional[str] = None) -> QueueItem:
         """把处于 manual 状态的项移出队列并用修正数据重新处理。"""
         self.manual_queue = [i for i in self.manual_queue if i is not item]
+        self._persist_manual()
         options = ProcessingOptions(kind=item.kind, format=item.format or "")
         return self.process_file(item.path, options, forced_match, forced_group)
 
@@ -335,4 +337,25 @@ class Processor:
         item.status = "manual"
         item.reason = reason
         self.manual_queue.append(item)
+        self._persist_manual()
         return item
+
+    def _persist_manual(self) -> None:
+        """把当前手动队列写盘。"""
+        if self.manual_store is not None:
+            self.manual_store.save_items([i.as_dict() for i in self.manual_queue])
+
+    def load_manual_items(self) -> List[QueueItem]:
+        """从磁盘恢复手动队列（应用重启后可继续处理）。"""
+        for d in self.manual_store.load_items():
+            self.manual_queue.append(
+                QueueItem(
+                    path=d.get("path", ""),
+                    kind=d.get("kind", "movie"),
+                    status="manual",
+                    format=d.get("format", ""),
+                    new_name=d.get("new_name", ""),
+                    reason=d.get("reason", ""),
+                )
+            )
+        return self.manual_queue

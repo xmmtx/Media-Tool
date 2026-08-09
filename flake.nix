@@ -1,5 +1,5 @@
 {
-  description = "A powerful and versatile bulk file renaming tool built with PyQt5";
+  description = "Multi-functional Media Manager & Batch Renamer (PyQt6)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -12,74 +12,59 @@
         pkgs = nixpkgs.legacyPackages.${system};
 
         pythonEnv = pkgs.python3.withPackages (ps: with ps; [
-          pyqt5
+          pyqt6
           mutagen
         ]);
 
-        ynrename = pkgs.stdenv.mkDerivation {
-          pname = "ynrename";
-          version = "1.0.0";
+        mediaTool = pkgs.stdenv.mkDerivation {
+          pname = "media-tool";
+          version = "0.1.0";
 
           src = ./.;
 
           nativeBuildInputs = [
-            pkgs.libsForQt5.wrapQtAppsHook
-            pkgs.imagemagick
+            pkgs.libsForQt6.wrapQtAppsHook
           ];
 
           buildInputs = [
-            pkgs.libsForQt5.qtbase
+            pkgs.libsForQt6.qtbase
+            pkgs.ffmpeg # 提供 ffprobe（实测视频分辨率）
             pythonEnv
           ];
 
           installPhase = ''
             runHook preInstall
 
-            mkdir -p $out/share/ynrename
-            cp main.py $out/share/ynrename/
-
-            mkdir -p $out/share/pixmaps
-            convert "ynrename.ico[$(identify -format '%w %p\n' ynrename.ico | sort -rn | head -n1 | awk '{print $2}')]" $out/share/pixmaps/ynrename.png
-
-            mkdir -p $out/share/applications
-            cat > $out/share/applications/ynrename.desktop <<EOF
-[Desktop Entry]
-Name=YNRename
-Comment=A powerful and versatile bulk file renaming tool built with PyQt5
-Exec=ynrename
-Icon=$out/share/pixmaps/ynrename.png
-Type=Application
-Categories=Utility;FileTools;
-Terminal=false
-EOF
+            mkdir -p $out/share/media-tool
+            cp -r main.py src $out/share/media-tool/
 
             mkdir -p $out/bin
-            makeWrapper ${pythonEnv}/bin/python3 $out/bin/ynrename \
-              --add-flags "$out/share/ynrename/main.py"
+            makeWrapper ${pythonEnv}/bin/python3 $out/bin/media-tool \
+              --add-flags "$out/share/media-tool/main.py"
 
             runHook postInstall
           '';
 
           postFixup = ''
-            wrapQtApp "$out/bin/ynrename"
+            wrapQtApp "$out/bin/media-tool"
           '';
 
           meta = with pkgs.lib; {
-            description = "A multi-functional utility designed to rename large batches of files quickly and efficiently. It offers a wide range of renaming rules from simple find-and-replace to advanced metadata-based formatting and regular expressions.";
+            description = "Multi-functional media manager & batch renamer with movie/TV/music pipelines, TMDB and LLM integration.";
             license = licenses.gpl3Only;
             platforms = platforms.all;
-            mainProgram = "ynrename";
+            mainProgram = "media-tool";
           };
         };
       in
       {
-        packages.default = ynrename;
-        packages.ynrename = ynrename;
+        packages.default = mediaTool;
+        packages.media-tool = mediaTool;
 
         devShells.default = pkgs.mkShell {
-          buildInputs = [ pythonEnv ];
+          buildInputs = [ pythonEnv pkgs.ffmpeg ];
           shellHook = ''
-            echo "YNRename development environment ready."
+            echo "Media-Tool development environment ready."
             echo "Run with: python main.py"
           '';
         };
