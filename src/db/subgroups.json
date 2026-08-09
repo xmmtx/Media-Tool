@@ -1,0 +1,10 @@
+{
+  "groups": {
+    "新之助": {
+      "rename_to": "新之助",
+      "aliases": [],
+      "source": "manual",
+      "added": "2026-08-09"
+    }
+  }
+}

@@ -40,8 +40,8 @@ reference/
 test/
 
 # ========================
-# Runtime data (src/db) — 本地配置与运行数据不入库
+# Local runtime data (src/db) — config & manual queue stay out of git
+# (subgroups.json is tracked: it is shared subtitle-group knowledge)
 # ========================
 src/db/config.json
-src/db/subgroups.json
 src/db/manual_queue.json
