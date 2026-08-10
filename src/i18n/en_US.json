@@ -79,7 +79,9 @@
   "output_mode_custom": "Custom",
   "output_mode_library": "Media Library",
   "output_root_movie": "Movies Root",
-  "output_root_tv": "TV Shows Root",
+  "output_root_tv_anime": "Anime Root",
+  "output_root_tv_drama": "TV Drama Root",
+  "output_root_tv_doc": "Documentary Root",
   "output_root_music": "Music Root",
   "artist_separator_label": "Artist Separators"
 }

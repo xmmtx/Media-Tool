@@ -79,7 +79,9 @@
   "output_mode_custom": "自定义",
   "output_mode_library": "媒体库",
   "output_root_movie": "电影根目录",
-  "output_root_tv": "剧集根目录",
+  "output_root_tv_anime": "番剧根目录",
+  "output_root_tv_drama": "电视剧根目录",
+  "output_root_tv_doc": "纪录片根目录",
   "output_root_music": "音乐根目录",
   "artist_separator_label": "歌手分割符"
 }

@@ -79,7 +79,9 @@
   "output_mode_custom": "自訂",
   "output_mode_library": "媒體庫",
   "output_root_movie": "電影根目錄",
-  "output_root_tv": "劇集根目錄",
+  "output_root_tv_anime": "番劇根目錄",
+  "output_root_tv_drama": "電視劇根目錄",
+  "output_root_tv_doc": "紀錄片根目錄",
   "output_root_music": "音樂根目錄",
   "artist_separator_label": "歌手分隔符"
 }

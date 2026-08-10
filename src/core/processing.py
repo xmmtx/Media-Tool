@@ -50,6 +50,27 @@ def sanitize_filename(name: str) -> str:
     return name.strip(" .")
 
 
+# 剧集类型分类：TMDB genre_ids（用于媒体库模式选择番剧/电视剧/纪录片根目录）
+_ANIME_GENRE_IDS = {16}   # Animation → 番剧
+_DOC_GENRE_IDS = {99}     # Documentary → 纪录片
+
+
+def classify_tv_type(genre_ids) -> Optional[str]:
+    """按 TMDB 类型 ID 分类剧集：``'anime'`` | ``'drama'`` | ``'doc'``。
+
+    无任何类型信息（如 TMDB 未匹配或未返回 genre_ids）时返回 ``None``，
+    调用方据此把该文件送入人工队列。
+    """
+    g = set(genre_ids or [])
+    if not g:
+        return None
+    if g & _DOC_GENRE_IDS:
+        return "doc"
+    if g & _ANIME_GENRE_IDS:
+        return "anime"
+    return "drama"
+
+
 @dataclass
 class ProcessingOptions:
     """单文件处理参数。"""
@@ -195,8 +216,11 @@ class Processor:
         if "resolution" in needed:
             info.resolution = probe_resolution(item.path)
 
+        # 媒体库模式下必须拿到 TMDB 匹配（用于番剧/电视剧/纪录片分类）
+        need_match = bool({"title_orig", "title_user", "year"} & needed) \
+            or options.output_mode == "library"
         match = forced_match
-        if not match and {"title_orig", "title_user", "year"} & needed:
+        if not match and need_match:
             if not info.title:
                 return self._to_manual(item, "cannot parse title from filename")
             matches = self.tmdb.search(info.title, year=info.year,
@@ -205,6 +229,14 @@ class Processor:
             if not match:
                 return self._to_manual(item, "no TMDB TV match")
         item.match = match
+
+        # 媒体库模式：分类剧集类型，识别失败进人工队列
+        if options.output_mode == "library":
+            tv_type = classify_tv_type(match.genres if match else [])
+            if not tv_type:
+                return self._to_manual(
+                    item, "cannot determine TV type (anime/drama/documentary)")
+            info.extra["tv_type"] = tv_type
 
         values = self._base_values(info, group, match)
         if match and info.season is not None and info.episode is not None:
@@ -335,7 +367,12 @@ class Processor:
         - ``custom``：落到自定义输出目录（或源目录）。
         """
         if options.output_mode == "library" and options.library_roots:
-            root = options.library_roots.get(item.kind)
+            root_key = item.kind
+            if item.kind == "tv":
+                # 剧集按识别出的类型选择根目录（番剧/电视剧/纪录片）
+                tv_type = (item.info.extra or {}).get("tv_type") or "drama"
+                root_key = f"tv_{tv_type}"
+            root = options.library_roots.get(root_key)
             if root:
                 rel = self._library_rel_path(item, values, ext)
                 return os.path.join(root, rel)

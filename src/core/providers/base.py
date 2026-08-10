@@ -29,6 +29,7 @@ class MediaMatch:
     episode_title_orig: Optional[str] = None
     episode_title_user: Optional[str] = None
     extra: dict = field(default_factory=dict)
+    genres: List[int] = field(default_factory=list)  # TMDB genre_ids（用于剧集分类）
 
     def as_dict(self) -> dict:
         """转换为表达式引擎可直接消费的字典（空值剔除）。"""

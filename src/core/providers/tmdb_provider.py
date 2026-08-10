@@ -82,6 +82,7 @@ class TMDBProvider(BaseProvider):
                     year=year,
                     overview=it.get("overview") or "",
                     poster_url=poster,
+                    genres=[int(g) for g in (it.get("genre_ids") or [])],
                 )
             )
         return matches

@@ -23,6 +23,7 @@ from qfluentwidgets import (
     PasswordLineEdit,
     PrimaryPushButton,
     PushButton,
+    ScrollArea,
     StrongBodyLabel,
     SubtitleLabel,
     SwitchButton,
@@ -86,7 +87,15 @@ class SettingsPage(QWidget):
         self.title_label = SubtitleLabel(self._t("nav_settings"))
         root.addWidget(self.title_label)
 
-        card = CardWidget(self)
+        # 内容放入滚动区：内容放得下时滚动条自动隐藏，超出时显示
+        self.scroll = ScrollArea(self)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        card = CardWidget()
+        self.scroll.setWidget(card)
+        root.addWidget(self.scroll, 1)
+
         lay = QVBoxLayout(card)
         lay.setContentsMargins(16, 16, 16, 16)
         lay.setSpacing(8)
@@ -168,7 +177,7 @@ class SettingsPage(QWidget):
         self.root_labels: Dict[str, StrongBodyLabel] = {}
         self.root_edits: Dict[str, LineEdit] = {}
         self.root_btns: Dict[str, PushButton] = {}
-        for code in ("movie", "tv", "music"):
+        for code in ("movie", "tv_anime", "tv_drama", "tv_doc", "music"):
             row = QHBoxLayout()
             lbl = StrongBodyLabel(self._t("output_root_" + code))
             edit = LineEdit(self)
@@ -204,8 +213,6 @@ class SettingsPage(QWidget):
         lay.addLayout(btn_row)
         lay.addStretch()
 
-        root.addWidget(card, 1)
-
     def _retranslate(self) -> None:
         self.title_label.setText(self._t("nav_settings"))
         self.lbl_lang.setText(self._t("settings_language"))
@@ -224,7 +231,7 @@ class SettingsPage(QWidget):
         self.output_mode_combo.setItemText(0, self._t("output_mode_custom"))
         self.output_mode_combo.setItemText(1, self._t("output_mode_library"))
         self.output_mode_combo.blockSignals(False)
-        for code in ("movie", "tv", "music"):
+        for code in ("movie", "tv_anime", "tv_drama", "tv_doc", "music"):
             self.root_labels[code].setText(self._t("output_root_" + code))
         self.lbl_artist_sep.setText(self._t("artist_separator_label"))
         # 语言下拉：更新"跟随系统"文案并保持选中
@@ -301,7 +308,9 @@ class SettingsPage(QWidget):
             "llm.model": self.config.get("llm.model", ""),
             "output.mode": self.config.get("output.mode", "custom"),
             "output.roots.movie": (self.config.get("output.roots", {}) or {}).get("movie", ""),
-            "output.roots.tv": (self.config.get("output.roots", {}) or {}).get("tv", ""),
+            "output.roots.tv_anime": (self.config.get("output.roots", {}) or {}).get("tv_anime", ""),
+            "output.roots.tv_drama": (self.config.get("output.roots", {}) or {}).get("tv_drama", ""),
+            "output.roots.tv_doc": (self.config.get("output.roots", {}) or {}).get("tv_doc", ""),
             "output.roots.music": (self.config.get("output.roots", {}) or {}).get("music", ""),
             "music.artist_separators": self.config.get("music.artist_separators", ""),
         }
@@ -320,7 +329,9 @@ class SettingsPage(QWidget):
             "llm.model": self.llm_model_edit.text().strip(),
             "output.mode": self.output_mode_combo.currentData() or "custom",
             "output.roots.movie": self.root_edits["movie"].text().strip(),
-            "output.roots.tv": self.root_edits["tv"].text().strip(),
+            "output.roots.tv_anime": self.root_edits["tv_anime"].text().strip(),
+            "output.roots.tv_drama": self.root_edits["tv_drama"].text().strip(),
+            "output.roots.tv_doc": self.root_edits["tv_doc"].text().strip(),
             "output.roots.music": self.root_edits["music"].text().strip(),
             "music.artist_separators": self.artist_sep_edit.text().strip(),
         }
@@ -376,7 +387,7 @@ class SettingsPage(QWidget):
         self.output_mode_combo.setCurrentIndex(om_idx if om_idx >= 0 else 0)
         self.output_mode_combo.blockSignals(False)
         roots = self.config.get("output.roots", {}) or {}
-        for code in ("movie", "tv", "music"):
+        for code in ("movie", "tv_anime", "tv_drama", "tv_doc", "music"):
             self.root_edits[code].blockSignals(True)
             self.root_edits[code].setText(str(roots.get(code, "")))
             self.root_edits[code].blockSignals(False)
@@ -402,7 +413,9 @@ class SettingsPage(QWidget):
         self.config.set("llm.model", self.llm_model_edit.text().strip())
         roots = {
             "movie": self.root_edits["movie"].text().strip(),
-            "tv": self.root_edits["tv"].text().strip(),
+            "tv_anime": self.root_edits["tv_anime"].text().strip(),
+            "tv_drama": self.root_edits["tv_drama"].text().strip(),
+            "tv_doc": self.root_edits["tv_doc"].text().strip(),
             "music": self.root_edits["music"].text().strip(),
         }
         self.config.set("output.mode", self.output_mode_combo.currentData() or "custom")

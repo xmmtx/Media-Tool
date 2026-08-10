@@ -54,7 +54,8 @@ class ConfigStore(JsonStore):
         "music": {"inject_cover": True, "artist_separators": ""},
         "output": {
             "mode": "custom",  # custom | library
-            "roots": {"movie": "", "tv": "", "music": ""},
+            "roots": {"movie": "", "music": "",
+                      "tv_anime": "", "tv_drama": "", "tv_doc": ""},
         },
     }
 
