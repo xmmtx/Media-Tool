@@ -38,11 +38,13 @@ from qfluentwidgets import (
     TableWidget,
 )
 
+from core.extractors.media_extractor import extract_from_filename
 from core.formatters.expression_engine import evaluate
 from core.processing import Processor, ProcessingOptions, QueueItem
 from core.providers import MediaMatch
 from i18n import I18n
 from .components.preview_box import PreviewBox
+from .episode_match import EpisodeMatchDialog
 from .manual_match import ManualMatchDialog
 
 KIND_INDEX = {"movie": 0, "tv": 1, "music": 2}
@@ -237,6 +239,24 @@ class MediaPage(QWidget):
         self.preview = PreviewBox()
         p.addWidget(self.preview)
 
+        # 节目页匹配：手动匹配 / 自动匹配（仅 TV 显示）
+        self.match_box = QWidget(self)
+        mb = QVBoxLayout(self.match_box)
+        mb.setContentsMargins(0, 0, 0, 0)
+        mb.setSpacing(4)
+        self.lbl_match = StrongBodyLabel(self._t("match_label"))
+        match_row = QHBoxLayout()
+        self.btn_manual_match = PushButton(self)
+        self.btn_auto_match = PushButton(self)
+        self.btn_manual_match.clicked.connect(self._on_manual_match)
+        self.btn_auto_match.clicked.connect(self._on_auto_match)
+        match_row.addWidget(self.btn_manual_match)
+        match_row.addWidget(self.btn_auto_match)
+        mb.addWidget(self.lbl_match)
+        mb.addLayout(match_row)
+        p.addWidget(self.match_box)
+        self.match_box.setVisible(self.kind == "tv")
+
         self.btn_process = PrimaryPushButton(self)
         self.btn_process.clicked.connect(self._start_process)
         p.addWidget(self.btn_process)
@@ -273,6 +293,9 @@ class MediaPage(QWidget):
         self.cover_switch.setText(self._t("cover_inject_label"))
         self.cover_edit.setPlaceholderText(self._t("cover_path_label"))
         self.drop_hint.setText(self._t("drop_hint"))
+        self.lbl_match.setText(self._t("match_label"))
+        self.btn_manual_match.setText(self._t("btn_manual_match"))
+        self.btn_auto_match.setText(self._t("btn_auto_match"))
         self.btn_process.setText(self._t("start_processing"))
         self.btn_undo.setText(self._t("undo"))
         # 处理方式下拉保持选中项，仅重设文本
@@ -379,7 +402,71 @@ class MediaPage(QWidget):
             cover_path=self.cover_edit.text().strip() or None,
         )
 
+    def _on_auto_match(self) -> None:
+        """自动匹配：走现有批处理；失败（manual）项自动打开手动匹配。"""
+        self._fallback_manual = True
+        self._start_process()
+
+    def _on_manual_match(self) -> None:
+        """手动匹配：搜索节目 → 多选集 → 发送到节目页匹配。"""
+        if not self._paths:
+            QMessageBox.information(self, self._t("err_title"), self._t("err_no_files"))
+            return
+        query = ""
+        for path in self._paths:
+            info = extract_from_filename(path)
+            if info.title:
+                query = info.title
+                break
+        dlg = EpisodeMatchDialog(self.processor.tmdb, query,
+                                 self.i18n.lang, self.i18n, parent=self)
+        if dlg.exec() and dlg.selected_episodes:
+            self._apply_episode_match(dlg.selected_show, dlg.selected_episodes,
+                                      list(self._paths))
+
+    def _open_manual_match_for_manual_items(self) -> None:
+        """自动匹配失败后：打开手动匹配，仅处理 manual 队列中的项。"""
+        targets = list(self._manual_map.keys())
+        if not targets:
+            return
+        query = ""
+        for path in targets:
+            info = extract_from_filename(path)
+            if info.title:
+                query = info.title
+                break
+        dlg = EpisodeMatchDialog(self.processor.tmdb, query,
+                                 self.i18n.lang, self.i18n, parent=self)
+        if dlg.exec() and dlg.selected_episodes:
+            self._apply_episode_match(dlg.selected_show, dlg.selected_episodes, targets)
+
+    def _apply_episode_match(self, show, episodes, paths) -> None:
+        """按 (season, episode) 把选中的集匹配到文件并处理。"""
+        ep_index = {(e["season"], e["episode"]): e["name"] for e in episodes}
+        show_title = (show.title_orig if show else "") or ""
+        matched = 0
+        for path in list(paths):
+            info = extract_from_filename(path)
+            title = ep_index.get((info.season, info.episode))
+            if title is None:
+                continue
+            forced: Dict[str, object] = {"title_user": title}
+            if show_title:
+                forced["title_orig"] = show_title
+            if info.season is not None:
+                forced["season"] = info.season
+            if info.episode is not None:
+                forced["episode"] = info.episode
+            item = self.processor.process_file(path, self._options(),
+                                               forced_values=forced)
+            self._on_item_done(item)
+            if item.status == "ok":
+                self._manual_map.pop(path, None)
+            matched += 1
+        self.lbl_status.setText(self._t("manual_matched", count=matched))
+
     def _start_process(self) -> None:
+        self._fallback_manual = False
         paths = list(self._paths)
         if not paths:
             QMessageBox.information(self, self._t("err_title"), self._t("err_no_files"))
@@ -420,6 +507,10 @@ class MediaPage(QWidget):
         self.progress.hide()
         self.lbl_status.setText(
             self._t("status_done", ok=ok, manual=manual, error=err))
+        # 自动匹配失败（存在 manual 项）→ 自动打开手动匹配
+        if getattr(self, "_fallback_manual", False) and manual > 0:
+            self._fallback_manual = False
+            self._open_manual_match_for_manual_items()
 
     def _on_cell_double_clicked(self, row: int, _col: int) -> None:
         path = self._paths[row] if row < len(self._paths) else None

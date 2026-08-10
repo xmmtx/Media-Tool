@@ -83,5 +83,18 @@
   "output_root_tv_drama": "TV Drama Root",
   "output_root_tv_doc": "Documentary Root",
   "output_root_music": "Music Root",
-  "artist_separator_label": "Artist Separators"
+  "artist_separator_label": "Artist Separators",
+  "match_label": "Match Episodes",
+  "btn_manual_match": "Manual Match",
+  "btn_auto_match": "Auto Match",
+  "manual_match_title": "Manual Match",
+  "manual_search": "Search",
+  "manual_shows": "Shows",
+  "manual_episodes": "Episodes",
+  "manual_send": "Send to TV Page",
+  "manual_multiselect_hint": "Hold Shift or Ctrl to multi-select episodes, then send",
+  "col_season": "Season",
+  "col_episode": "Episode",
+  "col_episode_title": "Title",
+  "manual_matched": "Matched {count} episodes"
 }

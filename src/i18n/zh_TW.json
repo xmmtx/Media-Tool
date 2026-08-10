@@ -83,5 +83,18 @@
   "output_root_tv_drama": "電視劇根目錄",
   "output_root_tv_doc": "紀錄片根目錄",
   "output_root_music": "音樂根目錄",
-  "artist_separator_label": "歌手分隔符"
+  "artist_separator_label": "歌手分隔符",
+  "match_label": "節目匹配",
+  "btn_manual_match": "手動匹配",
+  "btn_auto_match": "自動匹配",
+  "manual_match_title": "手動匹配",
+  "manual_search": "搜尋",
+  "manual_shows": "節目",
+  "manual_episodes": "集列表",
+  "manual_send": "傳送至節目頁",
+  "manual_multiselect_hint": "按住 Shift 或 Ctrl 可多選集，再傳送至節目頁匹配",
+  "col_season": "季編號",
+  "col_episode": "集編號",
+  "col_episode_title": "集標題",
+  "manual_matched": "已匹配 {count} 集"
 }

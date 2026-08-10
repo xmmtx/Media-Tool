@@ -138,15 +138,22 @@ class Processor:
         options: ProcessingOptions,
         forced_match: Optional[MediaMatch] = None,
         forced_group: Optional[str] = None,
+        forced_values: Optional[Dict[str, object]] = None,
     ) -> QueueItem:
-        """处理单个文件；``forced_match`` / ``forced_group`` 供手动干预后重跑。"""
+        """处理单个文件。
+
+        - ``forced_match`` / ``forced_group`` 供手动干预后重跑。
+        - ``forced_values`` 供手动匹配：直接以预填字段（如集标题/季/集）
+          走格式化，跳过 TMDB 搜索与分类。
+        """
         item = QueueItem(path=path, kind=options.kind)
         item.format = options.format
         try:
             if options.kind == "movie":
                 return self._process_movie(item, options, forced_match, forced_group)
             if options.kind == "tv":
-                return self._process_tv(item, options, forced_match, forced_group)
+                return self._process_tv(item, options, forced_match, forced_group,
+                                        forced_values)
             if options.kind == "music":
                 return self._process_music(item, options)
         except Exception as e:  # 运行期错误不中断整个批次
@@ -198,10 +205,27 @@ class Processor:
 
     # ── 剧集 pipeline ─────────────────────────────────────────────────────
 
-    def _process_tv(self, item, options, forced_match=None, forced_group=None) -> QueueItem:
+    def _process_tv(self, item, options, forced_match=None, forced_group=None,
+                    forced_values: Optional[Dict[str, object]] = None) -> QueueItem:
         needed = required_fields(options.format)
         info = extract_from_filename(item.path)
         item.info = info
+
+        # 手动匹配：直接用预填字段（集标题/季/集）走格式化，跳过 TMDB 搜索与分类
+        if forced_values is not None:
+            values = dict(forced_values)
+            if "group" in needed:
+                group = forced_group or self.resolve_subgroup(item.path, info.group)
+                item.group = group
+                if group:
+                    values["group"] = group
+            if "resolution" in needed:
+                info.resolution = probe_resolution(item.path)
+                if info.resolution:
+                    values["resolution"] = info.resolution
+            if info.year and "year" not in values:
+                values["year"] = info.year
+            return self._finalize(item, options, values)
 
         if {"season", "episode"} & needed and (info.season is None or info.episode is None):
             return self._to_manual(item, "cannot parse season/episode")

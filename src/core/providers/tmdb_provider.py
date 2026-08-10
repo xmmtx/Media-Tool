@@ -116,3 +116,35 @@ class TMDBProvider(BaseProvider):
             episode=episode,
             episode_title_user=data.get("name", ""),
         )
+
+    # ── 整季/整部剧集数据 ────────────────────────────────────────────────
+
+    def get_tv_seasons(self, tv_id: int, language: str = "zh-CN") -> List[dict]:
+        """获取一部剧集所有季的所有集。
+
+        返回 ``[{season, episode, name}]``，按季升序、集升序排列；
+        任意请求失败时跳过该季，全部失败返回空列表。
+        """
+        if not self.available or not tv_id:
+            return []
+        try:
+            data = self._request(f"/tv/{tv_id}", {"language": language})
+        except (urllib.error.URLError, OSError, ValueError, KeyError):
+            return []
+        episodes: List[dict] = []
+        for s in data.get("seasons", []) or []:
+            sn = s.get("season_number")
+            if sn is None or sn < 0:
+                continue
+            try:
+                sdata = self._request(f"/tv/{tv_id}/season/{sn}", {"language": language})
+            except (urllib.error.URLError, OSError, ValueError, KeyError):
+                continue
+            for ep in sdata.get("episodes", []) or []:
+                episodes.append({
+                    "season": int(sn),
+                    "episode": ep.get("episode_number"),
+                    "name": ep.get("name", ""),
+                })
+        episodes.sort(key=lambda e: (e["season"], e["episode"] or 0))
+        return episodes
