@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 from typing import Dict, List, Optional
 
-from PyQt6.QtCore import QEvent, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QFileDialog,
@@ -95,38 +95,39 @@ class ProcessingThread(QThread):
         self.finished_all.emit(ok, manual, err)
 
 
-class DropTableWidget(TableWidget):
-    """Fluent 表格 + 外部文件拖放。
+class DropCard(CardWidget):
+    """支持外部文件拖放的 Fluent 卡片容器。
 
-    通过重写 ``viewportEvent`` 接管 DragEnter/DragMove/Drop 事件：
-    仅接受含本地文件 URL 的拖放，命中时经 :attr:`files_dropped` 信号
-    发出路径列表；其余事件交回 Fluent ``TableWidget`` 默认处理。
+    内部容纳文件表格；表格自身不接收拖放，OLE 拖放事件会向上传播到
+    此卡片，命中后经 :attr:`files_dropped` 信号发出路径列表。
     """
 
     files_dropped = pyqtSignal(list)  # List[str]
 
     def __init__(self, parent: QWidget = None) -> None:
         super().__init__(parent)
-        self.setColumnCount(3)
         self.setAcceptDrops(True)
-        self.viewport().setAcceptDrops(True)
-        self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
 
-    def viewportEvent(self, event: QEvent):
-        t = event.type()
-        if t in (QEvent.Type.DragEnter, QEvent.Type.DragMove):
-            if event.mimeData().hasUrls():
-                event.acceptProposedAction()
-                return True
-        elif t == QEvent.Type.Drop:
-            mime = event.mimeData()
-            if mime.hasUrls():
-                paths = [u.toLocalFile() for u in mime.urls() if u.isLocalFile()]
-                if paths:
-                    self.files_dropped.emit(paths)
-                    event.acceptProposedAction()
-                    return True
-        return super().viewportEvent(event)
+    def dragEnterEvent(self, event) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event) -> None:
+        urls = event.mimeData().urls()
+        paths = [u.toLocalFile() for u in urls if u.isLocalFile()]
+        if paths:
+            self.files_dropped.emit(paths)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
 
 
 class MainWindow(QMainWindow):
@@ -192,7 +193,14 @@ class MainWindow(QMainWindow):
         split = QSplitter(Qt.Orientation.Horizontal)
         split.setChildrenCollapsible(False)
 
-        self.table = DropTableWidget(self)
+        # 文件列表卡片：DropCard 作为拖放目标，表格作为子部件
+        self.drop_card = DropCard(self)
+        card_lay = QVBoxLayout(self.drop_card)
+        card_lay.setContentsMargins(8, 8, 8, 8)
+        card_lay.setSpacing(4)
+
+        self.table = TableWidget(self.drop_card)
+        self.table.setColumnCount(3)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
@@ -205,8 +213,15 @@ class MainWindow(QMainWindow):
         self.table.setBorderVisible(True)
         self.table.setBorderRadius(8)
         self.table.cellDoubleClicked.connect(self._on_cell_double_clicked)
-        self.table.files_dropped.connect(self._on_files_dropped)
-        split.addWidget(self.table)
+        card_lay.addWidget(self.table, 1)
+
+        # 列表为空时的拖放提示
+        self.drop_hint = BodyLabel(self._t("drop_hint"))
+        self.drop_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_lay.addWidget(self.drop_hint, 1)
+
+        self.drop_card.files_dropped.connect(self._on_files_dropped)
+        split.addWidget(self.drop_card)
 
         # 右侧控制面板（Fluent 卡片容器）
         self.panel = CardWidget(self)
@@ -289,6 +304,7 @@ class MainWindow(QMainWindow):
         root.addLayout(bottom)
 
         self._on_mode_changed(0)
+        self._update_drop_hint()
 
     def _retranslate(self) -> None:
         self.setWindowTitle(self._t("app_title"))
@@ -302,6 +318,7 @@ class MainWindow(QMainWindow):
         self.lbl_lang.setText(self._t("language_label"))
         self.cover_switch.setText(self._t("cover_inject_label"))
         self.cover_edit.setPlaceholderText(self._t("cover_path_label"))
+        self.drop_hint.setText(self._t("drop_hint"))
         self.btn_process.setText(self._t("start_processing"))
         self.btn_undo.setText(self._t("undo"))
         self.table.setHorizontalHeaderLabels(
@@ -331,6 +348,7 @@ class MainWindow(QMainWindow):
         self.table.setItem(row, 2, QTableWidgetItem("pending"))
         self.table.item(row, 0).setData(Qt.ItemDataRole.UserRole, path)
         self.lbl_status.setText(self._t("status_ready", count=len(self._paths)))
+        self._update_drop_hint()
 
     def _add_files(self) -> None:
         files, _ = QFileDialog.getOpenFileNames(self, self._t("add_files"))
@@ -371,12 +389,20 @@ class MainWindow(QMainWindow):
         for r in rows:
             self.table.removeRow(r)
             del self._paths[r]
+        self._update_drop_hint()
 
     def _clear(self) -> None:
         self.table.setRowCount(0)
         self._paths.clear()
         self._manual_map.clear()
         self.lbl_status.setText(self._t("status_ready", count=0))
+        self._update_drop_hint()
+
+    def _update_drop_hint(self) -> None:
+        """列表为空时显示拖放提示，否则显示表格。"""
+        empty = not self._paths
+        self.drop_hint.setVisible(empty)
+        self.table.setVisible(not empty)
 
     # ── 处理 ──────────────────────────────────────────────────────────────
 

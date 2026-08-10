@@ -1,8 +1,10 @@
 # 媒体管理器运行依赖
 PyQt6>=6.6
 mutagen>=1.46
+PyQt6-Fluent-Widgets>=1.11.3
 
 # 说明:
 # - 分辨率实测依赖 ffprobe（随 ffmpeg 附带），非 pip 包，需单独安装。
 # - TMDB/LLM/Bangumi/MusicBrainz 提供者仅用标准库（urllib），无额外依赖。
 # - 开发/测试: 建议另装 pytest。
+# - Fluent 界面组件用 pip 安装（PyQt6 版）；reference/ 下的源码仅作本地参考。

@@ -2,6 +2,7 @@
   "app_title": "Media Manager",
   "add_files": "Add Files",
   "add_folder": "Add Folder",
+  "drop_hint": "Drop files or folders here",
   "remove_selected": "Remove Selected",
   "clear_list": "Clear List",
   "process": "Process",

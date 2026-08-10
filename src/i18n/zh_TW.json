@@ -2,6 +2,7 @@
   "app_title": "媒體管理器",
   "add_files": "新增檔案",
   "add_folder": "新增資料夾",
+  "drop_hint": "拖拽檔案或資料夾到這裡",
   "remove_selected": "移除選取",
   "clear_list": "清空清單",
   "process": "開始處理",
