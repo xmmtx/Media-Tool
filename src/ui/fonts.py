@@ -1,6 +1,6 @@
 """字体加载与全局应用。
 
-- 内置字体：优先使用 ``reference/`` 下的字体文件（默认字体）。
+- 内置字体：``src/assets/fonts/`` 下的字体文件（默认字体，随仓库提交）。
 - 全局应用：通过 Fluent 的 ``setFontFamilies`` 让新控件使用指定字体族，
   并遍历已有控件刷新，使字体切换立即生效。
 """
@@ -10,15 +10,22 @@ from __future__ import annotations
 import os
 from typing import List, Optional
 
-from PyQt6.QtGui import QFontDatabase
+from PyQt6.QtGui import QFont, QFontDatabase
 from PyQt6.QtWidgets import QApplication
 
 from qfluentwidgets import getFont, setFontFamilies
 
-# reference 内置字体（本地开发默认字体；注意 reference/ 目录是 gitignore 的）
+# 项目内置字体（随仓库提交，clone 即用）
 DEFAULT_FONT_PATH = os.path.normpath(os.path.join(
-    os.path.dirname(__file__), "..", "..", "reference",
+    os.path.dirname(__file__), "..", "assets", "fonts",
     "HarmonyOS_Sans_SC_Regular.ttf"))
+
+
+def _smooth(font: QFont) -> QFont:
+    """关闭 hinting 并开启抗锯齿，缓解非整数 DPI 下的字体发糊。"""
+    font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
+    font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+    return font
 
 
 def bundled_font_family() -> Optional[str]:
@@ -38,18 +45,18 @@ def system_font_families() -> List[str]:
 
 
 def apply_font_family(family: Optional[str]) -> None:
-    """把字体族应用到全局：Fluent 新控件 + 刷新所有已有控件。"""
+    """把字体族应用到全局：Fluent 新控件 + 刷新所有已有控件（含平滑渲染）。"""
     if not family:
         return
     setFontFamilies([family], save=False)
     app = QApplication.instance()
     if app is None:
         return
-    app.setFont(getFont(14))
+    app.setFont(_smooth(getFont(14)))
     for w in app.allWidgets():
         f = w.font()
         size = f.pixelSize()
-        nf = getFont(size if size > 0 else 14, f.weight())
+        nf = _smooth(getFont(size if size > 0 else 14, f.weight()))
         w.setFont(nf)
 
 

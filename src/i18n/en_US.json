@@ -39,7 +39,8 @@
   "nav_settings": "Settings",
   "refresh": "Refresh",
   "groups_count": "{count} groups",
-  "col_group_name": "Group",
+  "col_group_name": "Full Name",
+  "col_group_short": "Short Name",
   "col_group_aliases": "Aliases",
   "col_group_source": "Source",
   "settings_language": "Interface Language",
@@ -64,5 +65,16 @@
   "groups_remove_alias": "Remove this alias",
   "settings_cancel": "Cancel",
   "settings_font": "Font",
-  "settings_font_default": "Default ({name})"
+  "settings_font_default": "Default ({name})",
+  "provider_openai": "OpenAI",
+  "provider_anthropic": "Anthropic",
+  "provider_deepseek": "DeepSeek",
+  "provider_qwen": "Qwen",
+  "provider_moonshot": "Moonshot (Kimi)",
+  "provider_doubao": "Doubao",
+  "provider_zhipu": "Zhipu",
+  "provider_siliconflow": "SiliconFlow",
+  "llm_provider": "Provider",
+  "llm_base_url": "Base URL",
+  "ok": "OK"
 }

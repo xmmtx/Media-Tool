@@ -1,23 +1,20 @@
-"""设置页面：界面语言、TMDB API Key、LLM 配置等可选项。
+"""设置页面：界面语言、字体、TMDB API Key、LLM 配置等可选项。
 
-- 语言与 TMDB/LLM 均通过右下角「保存」按钮统一落盘；有改动时保存按钮亮起。
+- 语言 / 字体 / TMDB / LLM 均通过右下角「保存」按钮统一落盘；有改动时保存按钮亮起，
+  恢复为已保存的值时自动置灰。
 - 「取消」放弃未保存的改动并恢复为已保存的值。
-- 密钥输入框默认以密码形式（只显示字符数量），眼睛按钮可查看明文。
+- 密钥输入框默认以密码形式（只显示字符数量），单击眼睛按钮切换明文。
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Dict, Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QEvent
 from PyQt6.QtGui import QFontDatabase
 from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
-from ui.fonts import (apply_font_family, bundled_font_family,
-                      resolve_font_family, system_font_families)
-
 from qfluentwidgets import (
-    BodyLabel,
     CardWidget,
     ComboBox,
     InfoBar,
@@ -31,11 +28,34 @@ from qfluentwidgets import (
     SwitchButton,
 )
 
+from ui.fonts import (apply_font_family, bundled_font_family,
+                      resolve_font_family, system_font_families)
 from db import ConfigStore
 from i18n import I18n
 
 # 语言下拉的可选 code；"system" 表示跟随系统语言
 _LANG_CODES = ("system", "zh_CN", "zh_TW", "en_US")
+# AI 提供方（内部 code，显示名走 i18n，注意大小写）
+PROVIDERS = ("openai", "anthropic", "deepseek", "qwen",
+             "moonshot", "doubao", "zhipu", "siliconflow")
+
+
+class TogglePasswordLineEdit(PasswordLineEdit):
+    """点击眼睛按钮切换明文/密文（默认密文）。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setPasswordVisible(False)
+        self.viewButton.clicked.connect(self._toggle)
+
+    def _toggle(self) -> None:
+        self.setPasswordVisible(not self.isPasswordVisible())
+
+    def eventFilter(self, obj, e):
+        # 不拦截 viewButton 的鼠标事件，交给 clicked 信号实现点击切换
+        if obj is self.viewButton:
+            return False
+        return super().eventFilter(obj, e)
 
 
 class SettingsPage(QWidget):
@@ -48,9 +68,11 @@ class SettingsPage(QWidget):
         super().__init__(parent)
         self.config = config
         self.i18n = i18n
+        self._saved: Dict = {}
         self._build_ui()
         self._load_values_from_config()
         self._retranslate()
+        self._saved = self._snapshot()
         self.btn_save.setEnabled(False)
 
     def _t(self, key: str, **kw) -> str:
@@ -81,9 +103,7 @@ class SettingsPage(QWidget):
         # ── 字体 ──────────────────────────────────────────────────
         self.lbl_font = StrongBodyLabel(self._t("settings_font"))
         self.font_combo = ComboBox(self)
-        # 第一项：默认（内置字体）
         self.font_combo.addItem(self._font_default_label(), userData="")
-        # 其余：系统已安装字体
         for fam in system_font_families():
             self.font_combo.addItem(fam, userData=fam)
         self.font_combo.currentIndexChanged.connect(self._mark_dirty)
@@ -92,7 +112,7 @@ class SettingsPage(QWidget):
 
         # ── TMDB ──────────────────────────────────────────────────
         self.lbl_tmdb = StrongBodyLabel(self._t("settings_tmdb"))
-        self.tmdb_edit = PasswordLineEdit(self)
+        self.tmdb_edit = TogglePasswordLineEdit(self)
         self.tmdb_edit.textChanged.connect(self._mark_dirty)
         lay.addWidget(self.lbl_tmdb)
         lay.addWidget(self.tmdb_edit)
@@ -104,22 +124,31 @@ class SettingsPage(QWidget):
         lay.addWidget(self.lbl_llm)
         lay.addWidget(self.llm_enable)
 
+        self.lbl_llm_provider = StrongBodyLabel(self._t("llm_provider"))
         self.llm_provider_combo = ComboBox(self)
-        self.llm_provider_combo.addItems(["openai", "anthropic"])
+        for code in PROVIDERS:
+            self.llm_provider_combo.addItem(self._t("provider_" + code), userData=code)
         self.llm_provider_combo.currentIndexChanged.connect(self._mark_dirty)
+        lay.addWidget(self.lbl_llm_provider)
         lay.addWidget(self.llm_provider_combo)
 
+        self.lbl_llm_base = StrongBodyLabel(self._t("llm_base_url"))
         self.llm_base_edit = LineEdit(self)
         self.llm_base_edit.setPlaceholderText("https://api.openai.com/v1")
         self.llm_base_edit.textChanged.connect(self._mark_dirty)
+        lay.addWidget(self.lbl_llm_base)
         lay.addWidget(self.llm_base_edit)
 
-        self.llm_key_edit = PasswordLineEdit(self)
+        self.lbl_llm_key = StrongBodyLabel(self._t("settings_llm_api_key"))
+        self.llm_key_edit = TogglePasswordLineEdit(self)
         self.llm_key_edit.textChanged.connect(self._mark_dirty)
+        lay.addWidget(self.lbl_llm_key)
         lay.addWidget(self.llm_key_edit)
 
+        self.lbl_llm_model = StrongBodyLabel(self._t("settings_llm_model"))
         self.llm_model_edit = LineEdit(self)
         self.llm_model_edit.textChanged.connect(self._mark_dirty)
+        lay.addWidget(self.lbl_llm_model)
         lay.addWidget(self.llm_model_edit)
 
         # ── 底部按钮行（右下角）：保存 + 取消 ──────────────────────
@@ -143,9 +172,13 @@ class SettingsPage(QWidget):
         self.lbl_tmdb.setText(self._t("settings_tmdb"))
         self.lbl_llm.setText(self._t("settings_llm"))
         self.llm_enable.setText(self._t("settings_llm_enable"))
+        self.lbl_llm_provider.setText(self._t("llm_provider"))
+        self.lbl_llm_base.setText(self._t("llm_base_url"))
+        self.lbl_llm_key.setText(self._t("settings_llm_api_key"))
+        self.lbl_llm_model.setText(self._t("settings_llm_model"))
         self.btn_save.setText(self._t("settings_save"))
         self.btn_cancel.setText(self._t("settings_cancel"))
-        # 更新语言下拉的"跟随系统"文案并保持当前选中
+        # 语言下拉：更新"跟随系统"文案并保持选中
         cur = self.lang_combo.currentData() or self.config.get("language", "zh_CN")
         self.lang_combo.blockSignals(True)
         self.lang_combo.setItemText(0, self._t("settings_lang_system"))
@@ -153,15 +186,24 @@ class SettingsPage(QWidget):
         idx = self._index_of_data(self.lang_combo, cur)
         if idx >= 0:
             self.lang_combo.setCurrentIndex(idx)
-        # 更新字体下拉的"默认"文案并保持当前选中
+        # 字体下拉：更新"默认"文案并保持选中
         cur_font = self.font_combo.currentData() or self.config.get("font_family", "")
         self.font_combo.blockSignals(True)
         self.font_combo.setItemText(0, self._font_default_label())
         self.font_combo.blockSignals(False)
         f_idx = self._index_of_data(self.font_combo, cur_font)
         self.font_combo.setCurrentIndex(f_idx if f_idx >= 0 else 0)
+        # 提供方下拉：更新显示名并保持选中
+        cur_prov = self.llm_provider_combo.currentData()
+        self.llm_provider_combo.blockSignals(True)
+        for i, code in enumerate(PROVIDERS):
+            self.llm_provider_combo.setItemText(i, self._t("provider_" + code))
+        self.llm_provider_combo.blockSignals(False)
+        p_idx = self._index_of_data(self.llm_provider_combo, cur_prov)
+        if p_idx >= 0:
+            self.llm_provider_combo.setCurrentIndex(p_idx)
 
-    # ── 语言辅助 ──────────────────────────────────────────────────────────
+    # ── 语言 / 字体辅助 ──────────────────────────────────────────────────
 
     @staticmethod
     def _index_of_data(combo, code: str) -> int:
@@ -179,11 +221,38 @@ class SettingsPage(QWidget):
         name = bundled_font_family() or "System"
         return self._t("settings_font_default", name=name)
 
-    # ── 保存 / 取消 / 改动检测 ────────────────────────────────────────────
+    # ── 快照 / 改动检测 / 保存 / 取消 ────────────────────────────────────
+
+    def _snapshot(self) -> Dict:
+        """当前 config 的已保存值快照，用于判定是否有未保存改动。"""
+        return {
+            "language": self.config.get("language", "zh_CN"),
+            "font_family": self.config.get("font_family", ""),
+            "tmdb.api_key": self.config.get("tmdb.api_key", ""),
+            "llm.enabled": bool(self.config.get("llm.enabled", False)),
+            "llm.provider": self.config.get("llm.provider", "openai"),
+            "llm.base_url": self.config.get("llm.base_url", ""),
+            "llm.api_key": self.config.get("llm.api_key", ""),
+            "llm.model": self.config.get("llm.model", ""),
+        }
+
+    def _current(self) -> Dict:
+        """各控件当前值。"""
+        return {
+            "language": self.lang_combo.currentData() or "zh_CN",
+            "font_family": self.font_combo.currentData() or "",
+            "tmdb.api_key": self.tmdb_edit.text().strip(),
+            "llm.enabled": self.llm_enable.isChecked(),
+            "llm.provider": self.llm_provider_combo.currentData()
+            or self.llm_provider_combo.currentText(),
+            "llm.base_url": self.llm_base_edit.text().strip(),
+            "llm.api_key": self.llm_key_edit.text().strip(),
+            "llm.model": self.llm_model_edit.text().strip(),
+        }
 
     def _mark_dirty(self, *_args) -> None:
-        """任一设置变化时点亮保存按钮。"""
-        self.btn_save.setEnabled(True)
+        """任一设置变化时对比快照：与已保存一致则置灰，否则亮起。"""
+        self.btn_save.setEnabled(self._current() != self._saved)
 
     def _load_values_from_config(self) -> None:
         """从 config 重新加载全部控件值（供构造与取消使用），不触发改动标记。"""
@@ -194,6 +263,12 @@ class SettingsPage(QWidget):
             self.lang_combo.setCurrentIndex(idx)
         self.lang_combo.blockSignals(False)
 
+        cur_font = self.config.get("font_family", "")
+        f_idx = self._index_of_data(self.font_combo, cur_font)
+        self.font_combo.blockSignals(True)
+        self.font_combo.setCurrentIndex(f_idx if f_idx >= 0 else 0)
+        self.font_combo.blockSignals(False)
+
         self.tmdb_edit.blockSignals(True)
         self.tmdb_edit.setText(self.config.get("tmdb.api_key", ""))
         self.tmdb_edit.blockSignals(False)
@@ -202,8 +277,10 @@ class SettingsPage(QWidget):
         self.llm_enable.setChecked(bool(self.config.get("llm.enabled", False)))
         self.llm_enable.blockSignals(False)
 
+        prov = self.config.get("llm.provider", "openai")
+        p_idx = self._index_of_data(self.llm_provider_combo, prov)
         self.llm_provider_combo.blockSignals(True)
-        self.llm_provider_combo.setCurrentText(self.config.get("llm.provider", "openai"))
+        self.llm_provider_combo.setCurrentIndex(p_idx if p_idx >= 0 else 0)
         self.llm_provider_combo.blockSignals(False)
 
         self.llm_base_edit.blockSignals(True)
@@ -218,26 +295,23 @@ class SettingsPage(QWidget):
         self.llm_model_edit.setText(self.config.get("llm.model", ""))
         self.llm_model_edit.blockSignals(False)
 
-        cur_font = self.config.get("font_family", "")
-        f_idx = self._index_of_data(self.font_combo, cur_font)
-        self.font_combo.blockSignals(True)
-        self.font_combo.setCurrentIndex(f_idx if f_idx >= 0 else 0)
-        self.font_combo.blockSignals(False)
-
     def _save(self) -> None:
         """保存全部设置到 config.json；语言/字体变化时应用并广播。"""
         lang = self.lang_combo.currentData() or "zh_CN"
         old_lang = self.config.get("language", "zh_CN")
         font_family = self.font_combo.currentData() or ""
+        provider = self.llm_provider_combo.currentData() \
+            or self.llm_provider_combo.currentText()
         self.config.set("language", lang)
         self.config.set("font_family", font_family)
         self.config.set("tmdb.api_key", self.tmdb_edit.text().strip())
         self.config.set("llm.enabled", self.llm_enable.isChecked())
-        self.config.set("llm.provider", self.llm_provider_combo.currentText())
+        self.config.set("llm.provider", provider)
         self.config.set("llm.base_url", self.llm_base_edit.text().strip())
         self.config.set("llm.api_key", self.llm_key_edit.text().strip())
         self.config.set("llm.model", self.llm_model_edit.text().strip())
 
+        self._saved = self._snapshot()
         self.btn_save.setEnabled(False)
         # 应用字体（配置为空时回退内置字体）
         apply_font_family(resolve_font_family(font_family))
@@ -257,4 +331,5 @@ class SettingsPage(QWidget):
     def _cancel(self) -> None:
         """放弃未保存的改动，恢复为已保存的值。"""
         self._load_values_from_config()
+        self._saved = self._snapshot()
         self.btn_save.setEnabled(False)

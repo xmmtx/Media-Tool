@@ -39,7 +39,8 @@
   "nav_settings": "設定",
   "refresh": "重新整理",
   "groups_count": "共 {count} 個組",
-  "col_group_name": "組名",
+  "col_group_name": "全稱",
+  "col_group_short": "簡稱",
   "col_group_aliases": "別名",
   "col_group_source": "來源",
   "settings_language": "介面語言",
@@ -64,5 +65,16 @@
   "groups_remove_alias": "刪除此別名",
   "settings_cancel": "取消",
   "settings_font": "字型",
-  "settings_font_default": "預設（{name}）"
+  "settings_font_default": "預設（{name}）",
+  "provider_openai": "OpenAI",
+  "provider_anthropic": "Anthropic",
+  "provider_deepseek": "DeepSeek",
+  "provider_qwen": "Qwen",
+  "provider_moonshot": "Moonshot（Kimi）",
+  "provider_doubao": "Doubao（豆包）",
+  "provider_zhipu": "Zhipu（智譜）",
+  "provider_siliconflow": "SiliconFlow",
+  "llm_provider": "提供方",
+  "llm_base_url": "Base URL",
+  "ok": "確定"
 }

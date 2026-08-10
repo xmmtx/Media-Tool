@@ -79,6 +79,8 @@ class GroupEditDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(self._t("ok"))
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(self._t("cancel"))
         form.addRow(buttons)
 
     def _t(self, key: str, **kw) -> str:
@@ -184,13 +186,16 @@ class GroupsPage(QWidget):
         self.btn_delete.setText(self._t("groups_delete"))
         self.btn_refresh.setText(self._t("refresh"))
         self.table.setHorizontalHeaderLabels(
-            [self._t("col_group_name"), self._t("col_group_aliases"),
-             self._t("col_group_source")])
+            [self._t("col_group_name"), self._t("col_group_short"),
+             self._t("col_group_aliases")])
 
     # ── 加载 / 选中 ───────────────────────────────────────────────────────
 
     def reload(self) -> None:
-        """从 subgroups.json 重新加载组列表，主键存于第 0 列 UserRole。"""
+        """从 subgroups.json 重新加载：全称(主键) | 简称(rename_to) | 别名。
+
+        主键存于第 0 列 UserRole。
+        """
         self.table.setRowCount(0)
         keys = self.subgroups.names()
         self.lbl_count.setText(self._t("groups_count", count=len(keys)))
@@ -198,14 +203,14 @@ class GroupsPage(QWidget):
             meta = self.subgroups.get(key) or {}
             row = self.table.rowCount()
             self.table.insertRow(row)
-            rename_to = meta.get("rename_to") or key if isinstance(meta, dict) else key
+            full = key                                    # 全称 = 主键（原名）
+            short = meta.get("rename_to") or key if isinstance(meta, dict) else key
             aliases = meta.get("aliases") or [] if isinstance(meta, dict) else []
-            source = meta.get("source", "") if isinstance(meta, dict) else ""
-            item0 = QTableWidgetItem(rename_to)
+            item0 = QTableWidgetItem(full)
             item0.setData(Qt.ItemDataRole.UserRole, key)
             self.table.setItem(row, 0, item0)
-            self.table.setItem(row, 1, QTableWidgetItem("、".join(aliases)))
-            self.table.setItem(row, 2, QTableWidgetItem(str(source)))
+            self.table.setItem(row, 1, QTableWidgetItem(short))
+            self.table.setItem(row, 2, QTableWidgetItem("、".join(aliases)))
 
     def _selected_key(self) -> Optional[str]:
         rows = sorted({i.row() for i in self.table.selectedItems()})
