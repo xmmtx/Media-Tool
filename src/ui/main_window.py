@@ -10,7 +10,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Dict, Optional
+
+logger = logging.getLogger("ui.main_window")
 
 from PyQt6.QtCore import Qt
 
@@ -96,6 +99,7 @@ class MainWindow(FluentWindow):
     # ── 语言切换 / 重译 ───────────────────────────────────────────────────
 
     def _on_language_changed(self, code: str) -> None:
+        logger.info("切换语言: %s", code)
         self.i18n.set_lang(code)
         self.config.set("language", code)
         self._retranslate()

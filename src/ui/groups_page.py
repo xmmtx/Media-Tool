@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
+
+logger = logging.getLogger("ui.groups_page")
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -225,6 +228,7 @@ class GroupsPage(QWidget):
     # ── 增删改 ────────────────────────────────────────────────────────────
 
     def _add_group(self) -> None:
+        logger.info("打开添加组弹窗")
         dlg = GroupEditDialog(self._t("groups_add"), self.i18n, parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             v = dlg.values()

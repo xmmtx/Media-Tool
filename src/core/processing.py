@@ -15,10 +15,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
+
+logger = logging.getLogger("core.processing")
 
 try:
     from ..db import ConfigStore, ManualQueueStore, SubgroupStore  # src 作为顶层包运行时
@@ -148,6 +151,7 @@ class Processor:
         """
         item = QueueItem(path=path, kind=options.kind)
         item.format = options.format
+        logger.info("处理文件: %s (kind=%s, mode=%s)", path, options.kind, options.mode)
         try:
             if options.kind == "movie":
                 return self._process_movie(item, options, forced_match, forced_group)
@@ -159,6 +163,7 @@ class Processor:
         except Exception as e:  # 运行期错误不中断整个批次
             item.status = "error"
             item.error = str(e)
+            logger.error("处理异常 %s: %s", path, e)
         return item
 
     def reprocess(self, item: QueueItem, forced_match: Optional[MediaMatch] = None,
@@ -178,6 +183,7 @@ class Processor:
         needed = required_fields(options.format)
         info = extract_from_filename(item.path)
         item.info = info
+        logger.info("文件名解析: title=%s year=%s", info.title, info.year)
 
         group = forced_group
         if "group" in needed and not group:
@@ -188,6 +194,7 @@ class Processor:
 
         if "resolution" in needed:
             info.resolution = probe_resolution(item.path)
+            logger.info("分辨率(ffprobe): %s", info.resolution)
 
         match = forced_match
         if not match and {"title_orig", "title_user", "year"} & needed:
@@ -195,7 +202,12 @@ class Processor:
                 return self._to_manual(item, "cannot parse title from filename")
             matches = self.tmdb.search(info.title, year=info.year,
                                        media_type="movie", language=options.language)
+            logger.info("TMDB 搜索 %s (year=%s): %d 个候选",
+                        info.title, info.year, len(matches))
             match = self._pick_match(matches, info.year)
+            if match:
+                logger.info("TMDB 选中: %s (%s) id=%s",
+                            match.title_orig, match.title_user, match.tmdb_id)
             if not match:
                 return self._to_manual(item, "no TMDB movie match")
         item.match = match
@@ -210,10 +222,13 @@ class Processor:
         needed = required_fields(options.format)
         info = extract_from_filename(item.path)
         item.info = info
+        logger.info("文件名解析: title=%s year=%s season=%s episode=%s",
+                    info.title, info.year, info.season, info.episode)
 
         # 手动匹配：直接用预填字段（集标题/季/集）走格式化，跳过 TMDB 搜索与分类
         if forced_values is not None:
             values = dict(forced_values)
+            logger.info("手动匹配预填值: %s", values)
             if "group" in needed:
                 group = forced_group or self.resolve_subgroup(item.path, info.group)
                 item.group = group
@@ -249,7 +264,12 @@ class Processor:
                 return self._to_manual(item, "cannot parse title from filename")
             matches = self.tmdb.search(info.title, year=info.year,
                                        media_type="tv", language=options.language)
+            logger.info("TMDB 搜索 %s (year=%s): %d 个候选",
+                        info.title, info.year, len(matches))
             match = self._pick_match(matches, info.year)
+            if match:
+                logger.info("TMDB 选中: %s (%s) id=%s genres=%s",
+                            match.title_orig, match.title_user, match.tmdb_id, match.genres)
             if not match:
                 return self._to_manual(item, "no TMDB TV match")
         item.match = match
@@ -257,6 +277,7 @@ class Processor:
         # 媒体库模式：分类剧集类型，识别失败进人工队列
         if options.output_mode == "library":
             tv_type = classify_tv_type(match.genres if match else [])
+            logger.info("剧集类型分类: %s", tv_type)
             if not tv_type:
                 return self._to_manual(
                     item, "cannot determine TV type (anime/drama/documentary)")
@@ -282,6 +303,8 @@ class Processor:
         title = (tags.get("title") or [""])[0].strip()
         artists = split_artists(tags.get("artist"),
                                 self.config.get("music.artist_separators", ""))
+        logger.info("音乐标签: title=%s artists=%s album=%s",
+                    title, artists, tags.get("album"))
         if not title or not artists:
             return self._to_manual(item, "missing title/artist in metadata tags")
 
@@ -319,12 +342,16 @@ class Processor:
         """
         key = self.subgroups.recognize(group_from_filename) or self.subgroups.recognize(raw)
         if key:
-            return self.subgroups.display_name(key)
+            name = self.subgroups.display_name(key)
+            logger.info("字幕组识别(本地库): %r -> %s", group_from_filename, name)
+            return name
         if self.llm.available:
             result = self.llm.parse_subgroup(raw)
             if result:
                 self.subgroups.add(result["subgroup"], result["aliases"])
+                logger.info("字幕组识别(LLM): %s", result["subgroup"])
                 return result["subgroup"]
+        logger.warning("字幕组识别失败: %r", raw)
         return None
 
     def _base_values(self, info: MediaInfo, group: Optional[str],
@@ -366,11 +393,14 @@ class Processor:
             return self._to_manual(item, "format produced empty name")
         item.new_name = sanitize_filename(new_base) + ext
         dst = self._build_dst(item, options, values, ext)
+        logger.info("格式化: %s -> %s", os.path.basename(item.path), item.new_name)
         result = self._apply_op(item.path, dst, options.mode)
         if not result.ok:
             item.status = "error"
             item.error = result.error or "file operation failed"
+            logger.error("文件操作失败 %s -> %s: %s", item.path, dst, item.error)
             return item
+        logger.info("文件操作 %s 成功: %s -> %s", options.mode, item.path, dst)
         if post:
             try:
                 post(dst)
@@ -457,6 +487,7 @@ class Processor:
         item.reason = reason
         self.manual_queue.append(item)
         self._persist_manual()
+        logger.warning("进入人工队列: %s (原因=%s)", item.path, reason)
         return item
 
     def _persist_manual(self) -> None:

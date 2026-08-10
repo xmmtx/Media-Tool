@@ -23,12 +23,15 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from .json_store import JsonStore
+
+logger = logging.getLogger("db.subgroups")
 
 
 def normalize(name: str) -> str:
@@ -126,6 +129,8 @@ class SubgroupStore(JsonStore):
                         existing["aliases"].append(a)
                 existing.setdefault("rename_to", output)
                 self.save()
+                logger.info("组已存在，合并别名: %s (别名=%s, 简称=%s)",
+                            name, clean_aliases, output)
                 return False
             groups[name] = {
                 "rename_to": output,
@@ -133,6 +138,7 @@ class SubgroupStore(JsonStore):
                 "added": date.today().isoformat(),
             }
             self.save()
+            logger.info("新增组: %s (简称=%s, 别名=%s)", name, output, clean_aliases)
             return True
 
     def add_alias(self, name: str, alias: str) -> bool:
@@ -145,6 +151,7 @@ class SubgroupStore(JsonStore):
             if alias not in meta["aliases"]:
                 meta["aliases"].append(alias)
                 self.save()
+                logger.info("组 %s 补充别名: %s", name, alias)
             return True
 
     def update(
@@ -163,11 +170,14 @@ class SubgroupStore(JsonStore):
             if aliases is not None:
                 meta["aliases"] = list(dict.fromkeys(a for a in aliases if a))
             self.save()
+            logger.info("更新组 %s: 简称=%s, 别名=%s",
+                        name, meta.get("rename_to"), meta.get("aliases"))
             return True
 
     def remove(self, name: str) -> bool:
         with self._lock:
             if self.data["groups"].pop(name, None) is not None:
                 self.save()
+                logger.info("删除组: %s", name)
                 return True
             return False

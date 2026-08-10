@@ -38,6 +38,7 @@ Desktop.ini
 
 reference/
 test/
+logs/
 
 # ========================
 # Local runtime data (src/db) — config & manual queue stay out of git

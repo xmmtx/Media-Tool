@@ -26,10 +26,24 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .json_store import JsonStore
+
+logger = logging.getLogger("db.config")
+
+# 敏感配置键（API Key / Secret 等），日志中不记录明文
+_SENSITIVE_PARTS = ("key", "api", "secret", "password", "token")
+
+
+def _mask(dotted_key: str, value: Any) -> Any:
+    """对敏感配置值脱敏：只显示字符数，不显示明文。"""
+    low = dotted_key.lower()
+    if any(s in low for s in _SENSITIVE_PARTS) and value:
+        return f"***({len(str(value))} chars)"
+    return value
 
 
 class ConfigStore(JsonStore):
@@ -89,3 +103,4 @@ class ConfigStore(JsonStore):
                 node = nxt
             node[parts[-1]] = value
             self.save()
+        logger.info("config 更新: %s = %s", dotted_key, _mask(dotted_key, value))

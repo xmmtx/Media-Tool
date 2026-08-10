@@ -7,8 +7,11 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Dict, List, Optional
+
+logger = logging.getLogger("ui.media_page")
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -311,6 +314,7 @@ class MediaPage(QWidget):
 
     def _add_row(self, path: str) -> None:
         self._paths.append(path)
+        logger.info("添加文件: %s", path)
         row = self.table.rowCount()
         self.table.insertRow(row)
         self.table.setItem(row, 0, QTableWidgetItem(os.path.basename(path)))
@@ -340,6 +344,7 @@ class MediaPage(QWidget):
         ``QUrl.toLocalFile`` 可能返回正斜杠路径，这里统一用
         :func:`os.path.abspath` 规范化为与按钮添加一致的形式，保证去重可靠。
         """
+        logger.info("拖放 %d 个路径", len(paths))
         existing = set(self._paths)
         for p in paths:
             p = os.path.abspath(p)
@@ -359,6 +364,7 @@ class MediaPage(QWidget):
         for r in rows:
             self.table.removeRow(r)
             del self._paths[r]
+        logger.info("移除 %d 个选中文件", len(rows))
         self._update_drop_hint()
 
     def _clear(self) -> None:
@@ -366,6 +372,7 @@ class MediaPage(QWidget):
         self._paths.clear()
         self._manual_map.clear()
         self.lbl_status.setText(self._t("status_ready", count=0))
+        logger.info("清空文件列表")
         self._update_drop_hint()
 
     def _update_drop_hint(self) -> None:
@@ -376,6 +383,7 @@ class MediaPage(QWidget):
         """页面显示时按输出模式刷新"输出目录"输入框的可见性。"""
         super().showEvent(event)
         self._update_output_visibility()
+        logger.info("页面显示: %s (文件 %d 个)", self.kind, len(self._paths))
 
     def _update_output_visibility(self) -> None:
         """自定义模式显示"输出目录"输入框；媒体库模式隐藏（由 Jellyfin 结构决定）。"""
@@ -444,6 +452,7 @@ class MediaPage(QWidget):
         """按 (season, episode) 把选中的集匹配到文件并处理。"""
         ep_index = {(e["season"], e["episode"]): e["name"] for e in episodes}
         show_title = (show.title_orig if show else "") or ""
+        logger.info("手动匹配: 剧集=%s 选中 %d 集", show_title, len(episodes))
         matched = 0
         for path in list(paths):
             info = extract_from_filename(path)
@@ -471,6 +480,7 @@ class MediaPage(QWidget):
         if not paths:
             QMessageBox.information(self, self._t("err_title"), self._t("err_no_files"))
             return
+        logger.info("开始处理 %d 个文件 (kind=%s)", len(paths), self.kind)
         self.btn_process.setEnabled(False)
         self.btn_undo.setEnabled(False)
         self.progress.setValue(0)

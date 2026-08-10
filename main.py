@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -17,14 +18,24 @@ _SRC = _ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+# 抑制 Qt 的无害警告（libpng iCCP / QFont 等），真实问题由本项目日志记录
+os.environ.setdefault("QT_LOGGING_RULES", "*.warning=false")
+
+
+LOGGER_LEVEL = os.environ.get("MEDIA_TOOL_LOG_LEVEL", "INFO")
+
 
 def main() -> int:
+    import logging
+
+    from logging_setup import setup_logging
     from PyQt6.QtWidgets import QApplication
 
     from db import ConfigStore
     from ui.fonts import bundled_font_family, resolve_font_family, apply_font_family
     from ui.main_window import MainWindow, enable_high_dpi
 
+    setup_logging(getattr(logging, LOGGER_LEVEL.upper(), logging.INFO))
     enable_high_dpi()                    # 必须在 QApplication 之前
     app = QApplication(sys.argv)
 

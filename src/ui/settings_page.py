@@ -8,7 +8,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Dict, Optional
+
+logger = logging.getLogger("ui.settings_page")
 
 from PyQt6.QtCore import Qt, pyqtSignal, QEvent
 from PyQt6.QtGui import QFontDatabase
@@ -398,6 +401,7 @@ class SettingsPage(QWidget):
 
     def _save(self) -> None:
         """保存全部设置到 config.json；语言/字体变化时应用并广播。"""
+        logger.info("保存设置")
         lang = self.lang_combo.currentData() or "zh_CN"
         old_lang = self.config.get("language", "zh_CN")
         font_family = self.font_combo.currentData() or ""
@@ -441,6 +445,7 @@ class SettingsPage(QWidget):
 
     def _cancel(self) -> None:
         """放弃未保存的改动，恢复为已保存的值。"""
+        logger.info("取消设置修改")
         self._load_values_from_config()
         self._saved = self._snapshot()
         self.btn_save.setEnabled(False)
