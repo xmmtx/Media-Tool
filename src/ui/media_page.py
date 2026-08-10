@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QMessageBox,
     QSplitter,
+    QStackedWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
@@ -172,12 +173,14 @@ class MediaPage(QWidget):
         self.table.setBorderVisible(True)
         self.table.setBorderRadius(8)
         self.table.cellDoubleClicked.connect(self._on_cell_double_clicked)
-        card_lay.addWidget(self.table, 1)
 
-        # 列表为空时的拖放提示
+        # 空列表提示 / 表格 用 QStackedWidget 切换（避免 setVisible 状态问题）
+        self.drop_stack = QStackedWidget(self.drop_card)
         self.drop_hint = BodyLabel(self._t("drop_hint"))
         self.drop_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        card_lay.addWidget(self.drop_hint, 1)
+        self.drop_stack.addWidget(self.drop_hint)
+        self.drop_stack.addWidget(self.table)
+        card_lay.addWidget(self.drop_stack, 1)
 
         self.drop_card.files_dropped.connect(self._on_files_dropped)
         split.addWidget(self.drop_card)
@@ -339,9 +342,7 @@ class MediaPage(QWidget):
 
     def _update_drop_hint(self) -> None:
         """列表为空时显示拖放提示，否则显示表格。"""
-        empty = not self._paths
-        self.drop_hint.setVisible(empty)
-        self.table.setVisible(not empty)
+        self.drop_stack.setCurrentIndex(0 if not self._paths else 1)
 
     # ── 处理 ──────────────────────────────────────────────────────────────
 
@@ -352,7 +353,7 @@ class MediaPage(QWidget):
             format=self.fmt_edit.text(),
             mode=mode,
             output_dir=self.out_edit.text().strip() or None,
-            language=self.config.get("language", "zh_CN"),
+            language=self.i18n.lang,  # 已解析的实际语言（system 也已解析）
             inject_cover=self.cover_switch.isChecked(),
             cover_path=self.cover_edit.text().strip() or None,
         )
@@ -379,7 +380,12 @@ class MediaPage(QWidget):
             return
         self.table.item(row, 1).setText(item.new_name)
         status_item = self.table.item(row, 2)
-        status_item.setText(item.status)
+        # manual 时在状态列附带原因（如 subgroup not recognized），便于定位问题
+        status_text = item.status
+        if item.status == "manual" and item.reason:
+            status_text = f"{item.status}: {item.reason}"
+        status_item.setText(status_text)
+        status_item.setToolTip(item.reason or "")
         status_item.setForeground(
             Qt.GlobalColor.green if item.status == "ok"
             else Qt.GlobalColor.red if item.status == "error"

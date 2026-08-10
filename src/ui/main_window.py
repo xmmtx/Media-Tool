@@ -39,9 +39,12 @@ class MainWindow(FluentWindow):
     def __init__(self, i18n: Optional[I18n] = None,
                  config: Optional[ConfigStore] = None,
                  subgroup_store: Optional[SubgroupStore] = None) -> None:
-        self.i18n = i18n or I18n()
         self.config = config or ConfigStore()
         self.subgroups = subgroup_store or SubgroupStore()
+        if i18n is None:
+            # 启动时按 config 中的语言（支持 system 跟随系统）初始化界面
+            i18n = I18n(self.config.get("language", "zh_CN"))
+        self.i18n = i18n
         self.processor = Processor(self.config, self.subgroups)
         super().__init__()
         self._nav_items: Dict[str, object] = {}

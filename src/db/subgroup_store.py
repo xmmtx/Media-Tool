@@ -152,6 +152,27 @@ class SubgroupStore(JsonStore):
                 self.save()
             return True
 
+    def update(
+        self,
+        name: str,
+        rename_to: Optional[str] = None,
+        aliases: Optional[List[str]] = None,
+        source: Optional[str] = None,
+    ) -> bool:
+        """更新已有组的信息（只覆盖传入的字段）。"""
+        if name not in self.data["groups"]:
+            return False
+        with self._lock:
+            meta = self.data["groups"][name]
+            if rename_to is not None:
+                meta["rename_to"] = rename_to or name
+            if aliases is not None:
+                meta["aliases"] = list(dict.fromkeys(a for a in aliases if a))
+            if source is not None:
+                meta["source"] = source
+            self.save()
+            return True
+
     def remove(self, name: str) -> bool:
         with self._lock:
             if self.data["groups"].pop(name, None) is not None:

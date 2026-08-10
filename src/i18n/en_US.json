@@ -50,5 +50,17 @@
   "settings_llm_api_key": "LLM API Key",
   "settings_llm_model": "Model",
   "settings_save": "Save Settings",
-  "settings_saved": "Saved"
+  "settings_saved": "Saved",
+  "settings_lang_system": "Follow System",
+  "groups_add": "Add Group",
+  "groups_edit": "Edit",
+  "groups_delete": "Delete",
+  "groups_name": "Name (key)",
+  "groups_rename_to": "Rename To",
+  "groups_aliases": "Aliases (comma-separated)",
+  "groups_source": "Source",
+  "groups_confirm_delete": "Delete group {name}?",
+  "groups_add_alias": "Add Alias",
+  "groups_remove_alias": "Remove this alias",
+  "settings_cancel": "Cancel"
 }

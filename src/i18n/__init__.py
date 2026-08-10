@@ -8,11 +8,29 @@
 from __future__ import annotations
 
 import json
+import locale
+import os
 from pathlib import Path
 from typing import Dict, Optional
 
 LANGS: tuple = ("zh_CN", "zh_TW", "en_US")
 DEFAULT_LANG = "zh_CN"
+SYSTEM = "system"  # 跟随系统语言
+
+
+def detect_system_lang() -> str:
+    """检测系统语言并映射到已支持的语言之一。"""
+    try:
+        code, _ = locale.getdefaultlocale()
+    except Exception:
+        code = os.environ.get("LANG") or ""
+    code = (code or "").lower()
+    if code.startswith("zh"):
+        for tag in ("tw", "hk", "mo"):
+            if tag in code:
+                return "zh_TW"
+        return "zh_CN"
+    return "en_US"
 
 
 class I18n:
@@ -23,7 +41,14 @@ class I18n:
         self._tables: Dict[str, dict] = {}
         for code in LANGS:
             self._tables[code] = self._read(code)
-        self._lang = lang if lang in LANGS else DEFAULT_LANG
+        self._lang = self._resolve(lang)
+
+    @staticmethod
+    def _resolve(lang: str) -> str:
+        """把 ``SYSTEM`` 或未知语言解析为实际语言 code。"""
+        if lang == SYSTEM:
+            return detect_system_lang()
+        return lang if lang in LANGS else DEFAULT_LANG
 
     def _read(self, code: str) -> dict:
         path = self.directory / f"{code}.json"
@@ -51,8 +76,10 @@ class I18n:
         return self._lang
 
     def set_lang(self, lang: str) -> None:
-        if lang in LANGS:
-            self._lang = lang
+        """设置语言；传入 ``SYSTEM`` 时切换到跟随系统。"""
+        resolved = self._resolve(lang)
+        if resolved in LANGS:
+            self._lang = resolved
 
     @staticmethod
     def available_langs() -> tuple:

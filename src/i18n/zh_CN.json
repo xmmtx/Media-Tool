@@ -50,5 +50,17 @@
   "settings_llm_api_key": "LLM API Key",
   "settings_llm_model": "模型名称",
   "settings_save": "保存设置",
-  "settings_saved": "已保存"
+  "settings_saved": "已保存",
+  "settings_lang_system": "跟随系统",
+  "groups_add": "添加组",
+  "groups_edit": "编辑",
+  "groups_delete": "删除",
+  "groups_name": "组名（主键）",
+  "groups_rename_to": "重命名后名称",
+  "groups_aliases": "别名（逗号分隔）",
+  "groups_source": "来源",
+  "groups_confirm_delete": "确定删除组 {name} 吗？",
+  "groups_add_alias": "添加别名",
+  "groups_remove_alias": "删除该别名",
+  "settings_cancel": "取消"
 }
