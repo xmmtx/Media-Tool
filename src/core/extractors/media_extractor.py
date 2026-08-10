@@ -1,9 +1,10 @@
 """媒体信息提取器（Media Information Extractor）。
 
 职责:
-- **文件名解析**: 优先使用 PTN（`reference/parse-torrent-name`，若可导入），
-  否则回退到内置正则解析器，提取 title / year / season / episode / group /
-  quality / codec。**分辨率绝不通过文件名判定**。
+- **文件名解析**: 优先使用 anitopy（vendored 于 ``src/anitopy``，专为动漫
+  命名设计，可剥离 ``[字幕组]`` 前缀并识别 ``- 01`` / ``EP01`` / ``第01话``
+  等裸集号），其次内置正则，最后 PTN 回退，提取 title / year / season /
+  episode / group / quality / codec。**分辨率绝不通过文件名判定**。
 - **分辨率实测**: ``probe_resolution()`` 调用 ``ffprobe`` 读取真实视频流
   宽高（如 ``1920x1080``），是 ``resolution`` 字段的唯一来源；探测失败
   （无 ffprobe / 非视频 / 读取错误）时该字段保持 ``None``，绝不回退文件名推断。
@@ -59,6 +60,16 @@ def _to_int(value: object) -> Optional[int]:
         return None
 
 
+def _filename_only(path: str) -> str:
+    """取路径末段作为文件名，只在目录分隔符处分割。
+
+    Windows 下不用 ``os.path.basename`` / ``Path.name``，因为它们会把
+    文件名标题中的 ``/``（如「葬送的芙莉莲 / Sousou no Frieren」）误判为
+    路径分隔符而截断前半部分。
+    """
+    return path.rsplit(os.sep, 1)[-1]
+
+
 @dataclass
 class MediaInfo:
     """从文件名/媒体文件提取到的结构化信息。"""
@@ -73,7 +84,7 @@ class MediaInfo:
     resolution: Optional[str] = None
     quality: Optional[str] = None
     codec: Optional[str] = None
-    # 来源标记：title_source ∈ {ptn, regex, none}
+    # 来源标记：title_source ∈ {anitopy, ptn, regex, none}
     # resolution_source ∈ {ffprobe, none}（分辨率仅由 ffprobe 实测，不回退文件名）
     title_source: str = "none"
     resolution_source: str = "none"
@@ -121,6 +132,106 @@ def _load_ptn():
         except ImportError:
             _PTN_INSTANCE = None
     return _PTN_INSTANCE
+
+
+# ── anitopy 加载与解析（第一优先）───────────────────────────────────────
+
+_ANITOPY_MODULE = None
+
+
+def _load_anitopy():
+    """加载 anitopy 模块（vendored 于 ``src/anitopy``，或已 pip 安装）。"""
+    global _ANITOPY_MODULE
+    if _ANITOPY_MODULE is not None:
+        return _ANITOPY_MODULE
+    try:
+        import anitopy  # type: ignore
+
+        _ANITOPY_MODULE = anitopy
+    except ImportError:
+        _ANITOPY_MODULE = None
+    return _ANITOPY_MODULE
+
+
+def _strip_standalone_year(text: str):
+    """提取独立年份片段（如 ``Movie Name 2020`` 中的 2020），返回清理后文本与年份。
+
+    要求年份前后都不是字母/数字/汉字，避免误拆动漫标题中的数字。
+    """
+    m = re.search(
+        r"(?<![A-Za-z0-9\u4e00-\u9fff])(19|20\d{2})(?![A-Za-z0-9\u4e00-\u9fff])",
+        text,
+    )
+    if not m:
+        return text, None
+    cleaned = (text[: m.start()] + text[m.end():]).strip(" -_")
+    return cleaned, int(m.group(1))
+
+
+def _anitopy_parse(name: str) -> Optional[MediaInfo]:
+    """用 anitopy 解析文件名并映射到 :class:`MediaInfo`。
+
+    优势：专为动漫命名设计——剥离开头 ``[字幕组]`` / ``【组】``、识别
+    ``- 01`` / ``EP01`` / ``[01]`` / ``第01话`` 等裸集号。
+    """
+    anitopy = _load_anitopy()
+    if anitopy is None:
+        return None
+    try:
+        parts = anitopy.parse(_filename_only(name)) or {}
+    except Exception:
+        return None
+    if not parts or not parts.get("anime_title"):
+        return None
+    title = str(parts["anime_title"]).strip()
+    if not title:
+        return None
+
+    info = MediaInfo(filename=_filename_only(name))
+    info.title_source = "anitopy"
+    info.title = title
+
+    info.year = _to_int(parts.get("anime_year"))
+    info.season = _to_int(parts.get("anime_season"))
+    info.episode = _to_int(parts.get("episode_number"))
+    info.group = (
+        str(parts["release_group"]).strip() if parts.get("release_group") else None
+    )
+
+    # 分辨率只信 ffprobe：anitopy 的 video_resolution 仅存 extra 供参考
+    if parts.get("video_resolution"):
+        info.extra["filename_resolution"] = str(parts["video_resolution"]).strip()
+    if parts.get("video_term"):
+        info.codec = str(parts["video_term"]).strip()
+
+    # quality：source（WebRip / BluRay / DVD…）优先；anitopy 有时把
+    # ``WEB-DL`` 等误判为 episode_title，此时从 episode_title 回收
+    quality = str(parts["source"]).strip() if parts.get("source") else None
+    ep_title = str(parts["episode_title"]).strip() if parts.get("episode_title") else ""
+    if not quality and _QUALITY_RE.search(ep_title):
+        quality = ep_title
+        ep_title = ""
+    if quality:
+        info.quality = quality
+    if ep_title:
+        info.extra["episode_title"] = ep_title
+
+    for k in ("audio_term", "language", "subtitles", "other",
+              "file_checksum", "release_version"):
+        if parts.get(k):
+            info.extra[k] = str(parts[k])
+
+    # 年份后处理：anitopy 会把电影年份留在 title（如 ``Movie Name 2020``）
+    title, y = _strip_standalone_year(title)
+    if y is not None and info.year is None:
+        info.year = y
+    info.title = title or None
+
+    # 单季动漫：有集数但无季标识（``- 01``）→ 默认第 1 季
+    if info.episode is not None and info.season is None:
+        info.season = 1
+
+    return info if info.title else None
 
 
 # ── 文件名解析 ────────────────────────────────────────────────────────────
@@ -191,10 +302,16 @@ def _regex_parse(name: str, fullname: str) -> MediaInfo:
 def extract_from_filename(name: str) -> MediaInfo:
     """从文件名解析媒体信息。
 
-    策略：内置正则优先（对 CJK 与年份分离更稳定）；仅当正则解析不到
-    ``title`` 时，才尝试 PTN 作为补充解析器。
+    策略（优先级）：
+    1. anitopy（vendored 于 ``src/anitopy``）—— 专为动漫命名设计，
+       剥离 ``[字幕组]`` 前缀并识别 ``- 01`` / ``EP01`` 等裸集号；
+    2. 内置正则（对 CJK 与年份分离更稳定）；
+    3. PTN（仅前两者都拿不到 title 时补充）。
     """
-    base_name = os.path.basename(name)
+    base_name = _filename_only(name)
+    info = _anitopy_parse(base_name)
+    if info and info.title:
+        return info
     info = _regex_parse(base_name, base_name)
     if info.title:
         info.title_source = "regex"

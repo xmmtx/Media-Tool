@@ -46,8 +46,9 @@ LOGGER_LEVEL = os.environ.get("MEDIA_TOOL_LOG_LEVEL", "INFO")
 
 def main() -> int:
     import logging
+    import signal
 
-    from logging_setup import setup_logging
+    from PyQt6.QtCore import QTimer
     from PyQt6.QtWidgets import QApplication
 
     from db import ConfigStore
@@ -55,8 +56,21 @@ def main() -> int:
     from ui.main_window import MainWindow, enable_high_dpi
 
     setup_logging(getattr(logging, LOGGER_LEVEL.upper(), logging.INFO))
+    logger = logging.getLogger("main")
     enable_high_dpi()                    # 必须在 QApplication 之前
     app = QApplication(sys.argv)
+
+    # 终端 Ctrl+C 退出：Qt 事件循环阻塞时不会执行 Python 字节码，
+    # SIGINT 处理器需靠定时器周期性唤醒才能被调用 → 触发 app.quit()
+    _sigint_timer = QTimer()
+    _sigint_timer.timeout.connect(lambda: None)
+    _sigint_timer.start(200)
+
+    def _on_sigint(*_args) -> None:
+        logger.info("收到 Ctrl+C，退出应用")
+        app.quit()
+
+    signal.signal(signal.SIGINT, _on_sigint)
 
     # 加载内置字体（reference）并按配置应用默认字体
     bundled_font_family()
