@@ -62,5 +62,7 @@
   "groups_confirm_delete": "確定刪除組 {name} 嗎？",
   "groups_add_alias": "新增別名",
   "groups_remove_alias": "刪除此別名",
-  "settings_cancel": "取消"
+  "settings_cancel": "取消",
+  "settings_font": "字型",
+  "settings_font_default": "預設（{name}）"
 }

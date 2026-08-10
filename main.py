@@ -21,11 +21,19 @@ if str(_SRC) not in sys.path:
 def main() -> int:
     from PyQt6.QtWidgets import QApplication
 
+    from db import ConfigStore
+    from ui.fonts import bundled_font_family, resolve_font_family, apply_font_family
     from ui.main_window import MainWindow, enable_high_dpi
 
     enable_high_dpi()                    # 必须在 QApplication 之前
     app = QApplication(sys.argv)
-    window = MainWindow()
+
+    # 加载内置字体（reference）并按配置应用默认字体
+    bundled_font_family()
+    cfg = ConfigStore()
+    apply_font_family(resolve_font_family(cfg.get("font_family", "")))
+
+    window = MainWindow(config=cfg)
     window.show()
     return app.exec()
 

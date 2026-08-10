@@ -10,7 +10,11 @@ from __future__ import annotations
 from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFontDatabase
 from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+
+from ui.fonts import (apply_font_family, bundled_font_family,
+                      resolve_font_family, system_font_families)
 
 from qfluentwidgets import (
     BodyLabel,
@@ -74,6 +78,18 @@ class SettingsPage(QWidget):
         lay.addWidget(self.lbl_lang)
         lay.addWidget(self.lang_combo)
 
+        # ── 字体 ──────────────────────────────────────────────────
+        self.lbl_font = StrongBodyLabel(self._t("settings_font"))
+        self.font_combo = ComboBox(self)
+        # 第一项：默认（内置字体）
+        self.font_combo.addItem(self._font_default_label(), userData="")
+        # 其余：系统已安装字体
+        for fam in system_font_families():
+            self.font_combo.addItem(fam, userData=fam)
+        self.font_combo.currentIndexChanged.connect(self._mark_dirty)
+        lay.addWidget(self.lbl_font)
+        lay.addWidget(self.font_combo)
+
         # ── TMDB ──────────────────────────────────────────────────
         self.lbl_tmdb = StrongBodyLabel(self._t("settings_tmdb"))
         self.tmdb_edit = PasswordLineEdit(self)
@@ -123,6 +139,7 @@ class SettingsPage(QWidget):
     def _retranslate(self) -> None:
         self.title_label.setText(self._t("nav_settings"))
         self.lbl_lang.setText(self._t("settings_language"))
+        self.lbl_font.setText(self._t("settings_font"))
         self.lbl_tmdb.setText(self._t("settings_tmdb"))
         self.lbl_llm.setText(self._t("settings_llm"))
         self.llm_enable.setText(self._t("settings_llm_enable"))
@@ -136,6 +153,13 @@ class SettingsPage(QWidget):
         idx = self._index_of_data(self.lang_combo, cur)
         if idx >= 0:
             self.lang_combo.setCurrentIndex(idx)
+        # 更新字体下拉的"默认"文案并保持当前选中
+        cur_font = self.font_combo.currentData() or self.config.get("font_family", "")
+        self.font_combo.blockSignals(True)
+        self.font_combo.setItemText(0, self._font_default_label())
+        self.font_combo.blockSignals(False)
+        f_idx = self._index_of_data(self.font_combo, cur_font)
+        self.font_combo.setCurrentIndex(f_idx if f_idx >= 0 else 0)
 
     # ── 语言辅助 ──────────────────────────────────────────────────────────
 
@@ -150,6 +174,10 @@ class SettingsPage(QWidget):
         if code == "system":
             return self._t("settings_lang_system")
         return code
+
+    def _font_default_label(self) -> str:
+        name = bundled_font_family() or "System"
+        return self._t("settings_font_default", name=name)
 
     # ── 保存 / 取消 / 改动检测 ────────────────────────────────────────────
 
@@ -190,11 +218,19 @@ class SettingsPage(QWidget):
         self.llm_model_edit.setText(self.config.get("llm.model", ""))
         self.llm_model_edit.blockSignals(False)
 
+        cur_font = self.config.get("font_family", "")
+        f_idx = self._index_of_data(self.font_combo, cur_font)
+        self.font_combo.blockSignals(True)
+        self.font_combo.setCurrentIndex(f_idx if f_idx >= 0 else 0)
+        self.font_combo.blockSignals(False)
+
     def _save(self) -> None:
-        """保存全部设置到 config.json；语言变化时广播重译。"""
+        """保存全部设置到 config.json；语言/字体变化时应用并广播。"""
         lang = self.lang_combo.currentData() or "zh_CN"
         old_lang = self.config.get("language", "zh_CN")
+        font_family = self.font_combo.currentData() or ""
         self.config.set("language", lang)
+        self.config.set("font_family", font_family)
         self.config.set("tmdb.api_key", self.tmdb_edit.text().strip())
         self.config.set("llm.enabled", self.llm_enable.isChecked())
         self.config.set("llm.provider", self.llm_provider_combo.currentText())
@@ -203,6 +239,8 @@ class SettingsPage(QWidget):
         self.config.set("llm.model", self.llm_model_edit.text().strip())
 
         self.btn_save.setEnabled(False)
+        # 应用字体（配置为空时回退内置字体）
+        apply_font_family(resolve_font_family(font_family))
         if lang != old_lang:
             self.language_changed.emit(lang)
 

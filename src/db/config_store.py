@@ -37,6 +37,7 @@ class ConfigStore(JsonStore):
 
     DEFAULT: Dict = {
         "language": "zh_CN",
+        "font_family": "",  # 空表示使用内置字体（reference 字体）
         "tmdb": {"api_key": ""},
         "llm": {
             "enabled": False,

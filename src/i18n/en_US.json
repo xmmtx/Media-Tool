@@ -62,5 +62,7 @@
   "groups_confirm_delete": "Delete group {name}?",
   "groups_add_alias": "Add Alias",
   "groups_remove_alias": "Remove this alias",
-  "settings_cancel": "Cancel"
+  "settings_cancel": "Cancel",
+  "settings_font": "Font",
+  "settings_font_default": "Default ({name})"
 }
