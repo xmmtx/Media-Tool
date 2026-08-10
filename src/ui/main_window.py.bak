@@ -1,10 +1,8 @@
 """PyQt6 主窗口：文件表格 + 控制面板 + 后台批处理 + 手动干预入口。
 
-界面组件基于 PyQt-Fluent-Widgets（PyQt6 分支，源码在 ``reference/PyQt-Fluent-Widgets-PyQt6``）：
-
-- 文件列表：:class:`DropTableWidget`（Fluent ``TableWidget`` + 外部文件拖放）
-- 控制面板：Fluent ``ComboBox`` / ``LineEdit`` / ``SwitchButton`` / ``CardWidget``
-- 批处理：:class:`ProcessingThread` 后台逐文件调用 :class:`Processor`，
+- 高 DPI：调用 :func:`enable_high_dpi` 可在创建 QApplication 前启用。
+- i18n：通过 :class:`I18n` 提供 zh_CN / zh_TW / en_US 切换。
+- 批处理：:class:`ProcessingThread` 在后台逐文件调用 :class:`Processor`，
   通过信号更新表格；``manual`` 状态的行可双击打开手动匹配对话框。
 """
 
@@ -13,31 +11,25 @@ from __future__ import annotations
 import os
 from typing import Dict, List, Optional
 
-from PyQt6.QtCore import QEvent, Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
+    QProgressBar,
+    QPushButton,
     QSplitter,
+    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
-)
-
-from qfluentwidgets import (
-    BodyLabel,
-    CardWidget,
-    ComboBox,
-    LineEdit,
-    PrimaryPushButton,
-    ProgressBar,
-    PushButton,
-    StrongBodyLabel,
-    SwitchButton,
-    TableWidget,
 )
 
 from core.formatters.expression_engine import evaluate
@@ -46,6 +38,7 @@ from core.providers import MediaMatch
 from db import ConfigStore, SubgroupStore
 from i18n import I18n
 from .components.preview_box import PreviewBox
+from .components.toggle_row import ToggleRow
 from .manual_match import ManualMatchDialog
 
 KIND_INDEX = {"movie": 0, "tv": 1, "music": 2}
@@ -95,38 +88,62 @@ class ProcessingThread(QThread):
         self.finished_all.emit(ok, manual, err)
 
 
-class DropTableWidget(TableWidget):
-    """Fluent 表格 + 外部文件拖放。
+class DropTableWidget(QTableWidget):
+    """支持从资源管理器拖入文件/文件夹的表格。
 
-    通过重写 ``viewportEvent`` 接管 DragEnter/DragMove/Drop 事件：
-    仅接受含本地文件 URL 的拖放，命中时经 :attr:`files_dropped` 信号
-    发出路径列表；其余事件交回 Fluent ``TableWidget`` 默认处理。
+    当用户把系统拖拽的文件（或文件夹）落在表格区域时，
+    发出 :attr:`files_dropped` 信号，携带本地路径列表。
     """
 
     files_dropped = pyqtSignal(list)  # List[str]
 
-    def __init__(self, parent: QWidget = None) -> None:
-        super().__init__(parent)
-        self.setColumnCount(3)
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        # 显式启用外部文件拖放：widget 与 viewport 都接受拖放，
+        # DropOnly 模式让拖放事件进入 dragEnterEvent/dropEvent。
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
         self.setAcceptDrops(True)
         self.viewport().setAcceptDrops(True)
-        self.setDragDropMode(QAbstractItemView.DragDropMode.DropOnly)
 
-    def viewportEvent(self, event: QEvent):
-        t = event.type()
-        if t in (QEvent.Type.DragEnter, QEvent.Type.DragMove):
-            if event.mimeData().hasUrls():
-                event.acceptProposedAction()
-                return True
-        elif t == QEvent.Type.Drop:
-            mime = event.mimeData()
-            if mime.hasUrls():
-                paths = [u.toLocalFile() for u in mime.urls() if u.isLocalFile()]
-                if paths:
-                    self.files_dropped.emit(paths)
-                    event.acceptProposedAction()
-                    return True
-        return super().viewportEvent(event)
+    # ── 临时调试日志（定位拖放失败，确认后移除） ──────────────
+    def _dbg(self, msg: str) -> None:
+        path = os.path.join(os.path.dirname(__file__), "..", "..", "_drop_debug.log")
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(msg + "\n")
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        mime = event.mimeData()
+        self._dbg(f"[dragEnter] hasUrls={mime.hasUrls()} formats={mime.formats()}")
+        if mime.hasUrls():
+            event.acceptProposedAction()
+            self._dbg("[dragEnter] ACCEPTED")
+        else:
+            super().dragEnterEvent(event)
+            self._dbg("[dragEnter] -> super()")
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        mime = event.mimeData()
+        self._dbg(f"[dragMove] hasUrls={mime.hasUrls()}")
+        if mime.hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        mime = event.mimeData()
+        self._dbg(f"[drop] hasUrls={mime.hasUrls()}")
+        if not mime.hasUrls():
+            super().dropEvent(event)
+            return
+        urls = mime.urls()
+        paths = [u.toLocalFile() for u in urls if u.isLocalFile()]
+        self._dbg(f"[drop] urls={[u.toString() for u in urls]}")
+        if paths:
+            self.files_dropped.emit(paths)
+            event.acceptProposedAction()
+            self._dbg(f"[drop] ACCEPTED, paths={paths}")
+        else:
+            super().dropEvent(event)
 
 
 class MainWindow(QMainWindow):
@@ -155,31 +172,25 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         self.setWindowTitle(self._t("app_title"))
-        self.resize(1100, 680)
+        self.resize(1080, 640)
 
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(10)
 
-        # ── 顶部工具条 ──────────────────────────────────────────────
+        # 顶部工具条
         top = QHBoxLayout()
-        self.mode_combo = ComboBox(self)
-        self.mode_combo.addItems(
-            [self._t("mode_movie"), self._t("mode_tv"), self._t("mode_music")])
-        self.mode_combo.setMinimumWidth(120)
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItems([self._t("mode_movie"), self._t("mode_tv"), self._t("mode_music")])
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
-
-        self.btn_add_files = PrimaryPushButton(self)
-        self.btn_add_folder = PushButton(self)
-        self.btn_remove = PushButton(self)
-        self.btn_clear = PushButton(self)
+        self.btn_add_files = QPushButton(self._t("add_files"))
+        self.btn_add_folder = QPushButton(self._t("add_folder"))
+        self.btn_remove = QPushButton(self._t("remove_selected"))
+        self.btn_clear = QPushButton(self._t("clear_list"))
         self.btn_add_files.clicked.connect(self._add_files)
         self.btn_add_folder.clicked.connect(self._add_folder)
         self.btn_remove.clicked.connect(self._remove_selected)
         self.btn_clear.clicked.connect(self._clear)
-
         top.addWidget(self.mode_combo)
         top.addWidget(self.btn_add_files)
         top.addWidget(self.btn_add_folder)
@@ -188,11 +199,10 @@ class MainWindow(QMainWindow):
         top.addStretch()
         root.addLayout(top)
 
-        # ── 中部：文件表格 + 控制面板 ────────────────────────────────
+        # 中部：文件表格 + 控制面板
         split = QSplitter(Qt.Orientation.Horizontal)
-        split.setChildrenCollapsible(False)
 
-        self.table = DropTableWidget(self)
+        self.table = DropTableWidget(0, 3)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
@@ -202,44 +212,38 @@ class MainWindow(QMainWindow):
             1, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.setBorderVisible(True)
-        self.table.setBorderRadius(8)
         self.table.cellDoubleClicked.connect(self._on_cell_double_clicked)
         self.table.files_dropped.connect(self._on_files_dropped)
         split.addWidget(self.table)
 
-        # 右侧控制面板（Fluent 卡片容器）
-        self.panel = CardWidget(self)
-        p = QVBoxLayout(self.panel)
-        p.setContentsMargins(16, 16, 16, 16)
-        p.setSpacing(8)
+        panel = QWidget()
+        p = QVBoxLayout(panel)
 
-        self.lbl_format = StrongBodyLabel(self._t("format_label"))
-        self.fmt_edit = LineEdit(self)
+        self.lbl_format = QLabel(self._t("format_label"))
+        self.fmt_edit = QLineEdit()
         self.fmt_edit.setPlaceholderText("{title_orig} ({year}) - [{group}]")
         self.fmt_edit.textChanged.connect(self._update_preview)
         p.addWidget(self.lbl_format)
         p.addWidget(self.fmt_edit)
 
-        self.lbl_mode = StrongBodyLabel(self._t("process"))
-        self.mode_op_combo = ComboBox(self)
-        self.mode_op_combo.addItems(
-            [self._t("mode_rename"), self._t("mode_copy"), self._t("mode_hardlink")])
+        self.lbl_mode = QLabel(self._t("process"))
+        self.mode_op_combo = QComboBox()
+        self.mode_op_combo.addItems([self._t("mode_rename"), self._t("mode_copy"), self._t("mode_hardlink")])
         p.addWidget(self.lbl_mode)
         p.addWidget(self.mode_op_combo)
 
-        self.lbl_out = StrongBodyLabel(self._t("output_dir_label"))
+        self.lbl_out = QLabel(self._t("output_dir_label"))
         out_row = QHBoxLayout()
-        self.out_edit = LineEdit(self)
-        self.btn_out = PushButton(self)
+        self.out_edit = QLineEdit()
+        self.btn_out = QPushButton("…")
         self.btn_out.clicked.connect(self._choose_output_dir)
         out_row.addWidget(self.out_edit, 1)
         out_row.addWidget(self.btn_out)
         p.addWidget(self.lbl_out)
         p.addLayout(out_row)
 
-        self.lbl_lang = StrongBodyLabel(self._t("language_label"))
-        self.lang_combo = ComboBox(self)
+        self.lbl_lang = QLabel(self._t("language_label"))
+        self.lang_combo = QComboBox()
         for code in I18n.available_langs():
             self.lang_combo.addItem(code)
         self.lang_combo.setCurrentText(self.i18n.lang)
@@ -247,40 +251,38 @@ class MainWindow(QMainWindow):
         p.addWidget(self.lbl_lang)
         p.addWidget(self.lang_combo)
 
-        # 注入封面开关（Fluent SwitchButton）
-        self.cover_switch = SwitchButton(self._t("cover_inject_label"), self)
-        self.cover_switch.setChecked(False)
-        p.addWidget(self.cover_switch)
+        self.cover_toggle = ToggleRow(self._t("cover_inject_label"))
+        self.cover_toggle.setChecked(False)
         cover_row = QHBoxLayout()
-        self.cover_edit = LineEdit(self)
+        self.cover_edit = QLineEdit()
         self.cover_edit.setPlaceholderText(self._t("cover_path_label"))
-        self.btn_cover = PushButton(self)
+        self.btn_cover = QPushButton("…")
         self.btn_cover.clicked.connect(self._choose_cover)
         cover_row.addWidget(self.cover_edit, 1)
         cover_row.addWidget(self.btn_cover)
+        p.addWidget(self.cover_toggle)
         p.addLayout(cover_row)
 
         self.preview = PreviewBox()
         p.addWidget(self.preview)
 
-        self.btn_process = PrimaryPushButton(self)
+        self.btn_process = QPushButton(self._t("start_processing"))
         self.btn_process.clicked.connect(self._start_process)
         p.addWidget(self.btn_process)
         p.addStretch()
 
-        split.addWidget(self.panel)
+        split.addWidget(panel)
         split.setStretchFactor(0, 3)
         split.setStretchFactor(1, 1)
         root.addWidget(split, 1)
 
-        # ── 底部：状态 + 进度 + 撤销 ─────────────────────────────────
+        # 底部：状态 + 进度 + 撤销
         bottom = QHBoxLayout()
-        self.lbl_status = BodyLabel(self._t("status_ready", count=0))
-        self.progress = ProgressBar(self)
+        self.lbl_status = QLabel(self._t("status_ready", count=0))
+        self.progress = QProgressBar()
         self.progress.setRange(0, 100)
-        self.progress.setFixedWidth(220)
         self.progress.hide()
-        self.btn_undo = PushButton(self)
+        self.btn_undo = QPushButton(self._t("undo"))
         self.btn_undo.setEnabled(False)
         self.btn_undo.clicked.connect(self._undo)
         bottom.addWidget(self.lbl_status, 1)
@@ -300,7 +302,7 @@ class MainWindow(QMainWindow):
         self.lbl_mode.setText(self._t("process"))
         self.lbl_out.setText(self._t("output_dir_label"))
         self.lbl_lang.setText(self._t("language_label"))
-        self.cover_switch.setText(self._t("cover_inject_label"))
+        self.cover_toggle.setText(self._t("cover_inject_label"))
         self.cover_edit.setPlaceholderText(self._t("cover_path_label"))
         self.btn_process.setText(self._t("start_processing"))
         self.btn_undo.setText(self._t("undo"))
@@ -388,7 +390,7 @@ class MainWindow(QMainWindow):
             mode=mode,
             output_dir=self.out_edit.text().strip() or None,
             language=self.i18n.lang,
-            inject_cover=self.cover_switch.isChecked(),
+            inject_cover=self.cover_toggle.isChecked(),
             cover_path=self.cover_edit.text().strip() or None,
         )
 

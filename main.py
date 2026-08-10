@@ -17,6 +17,11 @@ _SRC = _ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
+# PyQt-Fluent-Widgets（PyQt6 分支）源码路径，加入 sys.path 以便 import qfluentwidgets
+_REF = _ROOT / "reference" / "PyQt-Fluent-Widgets-PyQt6"
+if str(_REF) not in sys.path:
+    sys.path.insert(0, str(_REF))
+
 
 def main() -> int:
     from PyQt6.QtWidgets import QApplication
