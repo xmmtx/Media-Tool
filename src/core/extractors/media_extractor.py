@@ -60,16 +60,6 @@ def _to_int(value: object) -> Optional[int]:
         return None
 
 
-def _filename_only(path: str) -> str:
-    """取路径末段作为文件名，只在目录分隔符处分割。
-
-    Windows 下不用 ``os.path.basename`` / ``Path.name``，因为它们会把
-    文件名标题中的 ``/``（如「葬送的芙莉莲 / Sousou no Frieren」）误判为
-    路径分隔符而截断前半部分。
-    """
-    return path.rsplit(os.sep, 1)[-1]
-
-
 @dataclass
 class MediaInfo:
     """从文件名/媒体文件提取到的结构化信息。"""
@@ -178,7 +168,7 @@ def _anitopy_parse(name: str) -> Optional[MediaInfo]:
     if anitopy is None:
         return None
     try:
-        parts = anitopy.parse(_filename_only(name)) or {}
+        parts = anitopy.parse(os.path.basename(name)) or {}
     except Exception:
         return None
     if not parts or not parts.get("anime_title"):
@@ -187,7 +177,7 @@ def _anitopy_parse(name: str) -> Optional[MediaInfo]:
     if not title:
         return None
 
-    info = MediaInfo(filename=_filename_only(name))
+    info = MediaInfo(filename=os.path.basename(name))
     info.title_source = "anitopy"
     info.title = title
 
@@ -308,7 +298,7 @@ def extract_from_filename(name: str) -> MediaInfo:
     2. 内置正则（对 CJK 与年份分离更稳定）；
     3. PTN（仅前两者都拿不到 title 时补充）。
     """
-    base_name = _filename_only(name)
+    base_name = os.path.basename(name)
     info = _anitopy_parse(base_name)
     if info and info.title:
         return info
