@@ -18,8 +18,27 @@ _SRC = _ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-# 抑制 Qt 的无害警告（libpng iCCP / QFont 等），真实问题由本项目日志记录
-os.environ.setdefault("QT_LOGGING_RULES", "*.warning=false")
+# ── Qt 消息过滤：只静默已知无害警告，其余 Qt 警告照常输出 ──────────
+# libpng iCCP（资源图片 sRGB profile 配置问题）与 QFont 字号计算警告
+# 均在 Qt 侧产生，且无独立 category，只能按文本过滤。
+import logging as _logging
+
+from PyQt6.QtCore import QtMsgType, qInstallMessageHandler
+
+_HARMLESS_WARNINGS = ("libpng warning", "iCCP", "Point size")
+
+
+def _qt_message_handler(mode: QtMsgType, context, message: str) -> None:
+    if mode == QtMsgType.QtWarningMsg and any(
+        t in (message or "") for t in _HARMLESS_WARNINGS
+    ):
+        return
+    loc = f"{context.file}:{context.line} " if context.file else ""
+    cat = f"({context.category}) " if context.category else ""
+    sys.stderr.write(f"{loc}{cat}{message}\n")
+
+
+qInstallMessageHandler(_qt_message_handler)
 
 
 LOGGER_LEVEL = os.environ.get("MEDIA_TOOL_LOG_LEVEL", "INFO")
