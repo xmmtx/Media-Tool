@@ -12,6 +12,7 @@ import os
 from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -87,6 +88,45 @@ class ProcessingThread(QThread):
         self.finished_all.emit(ok, manual, err)
 
 
+class DropTableWidget(QTableWidget):
+    """支持从资源管理器拖入文件/文件夹的表格。
+
+    当用户把系统拖拽的文件（或文件夹）落在表格区域时，
+    发出 :attr:`files_dropped` 信号，携带本地路径列表。
+    """
+
+    files_dropped = pyqtSignal(list)  # List[str]
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        mime = event.mimeData()
+        if not mime.hasUrls():
+            super().dropEvent(event)
+            return
+        urls = mime.urls()
+        paths = [u.toLocalFile() for u in urls if u.isLocalFile()]
+        if paths:
+            self.files_dropped.emit(paths)
+            event.acceptProposedAction()
+        else:
+            super().dropEvent(event)
+
+
 class MainWindow(QMainWindow):
     """媒体管理器主窗口。"""
 
@@ -143,7 +183,7 @@ class MainWindow(QMainWindow):
         # 中部：文件表格 + 控制面板
         split = QSplitter(Qt.Orientation.Horizontal)
 
-        self.table = QTableWidget(0, 3)
+        self.table = DropTableWidget(0, 3)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
@@ -154,6 +194,7 @@ class MainWindow(QMainWindow):
         self.table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.ResizeMode.ResizeToContents)
         self.table.cellDoubleClicked.connect(self._on_cell_double_clicked)
+        self.table.files_dropped.connect(self._on_files_dropped)
         split.addWidget(self.table)
 
         panel = QWidget()
@@ -287,6 +328,26 @@ class MainWindow(QMainWindow):
             path = os.path.join(folder, name)
             if os.path.isfile(path):
                 self._add_row(path)
+
+    def _on_files_dropped(self, paths: List[str]) -> None:
+        """拖入文件/文件夹：文件直接入列，文件夹递归收集其中的文件。
+
+        ``QUrl.toLocalFile`` 可能返回正斜杠路径，这里统一用
+        :func:`os.path.abspath` 规范化为与按钮添加一致的形式，保证去重可靠。
+        """
+        existing = set(self._paths)
+        for p in paths:
+            p = os.path.abspath(p)
+            if os.path.isdir(p):
+                for root, _dirs, files in os.walk(p):
+                    for name in files:
+                        full = os.path.join(root, name)
+                        if full not in existing:
+                            self._add_row(full)
+                            existing.add(full)
+            elif os.path.isfile(p) and p not in existing:
+                self._add_row(p)
+                existing.add(p)
 
     def _remove_selected(self) -> None:
         rows = sorted({i.row() for i in self.table.selectedItems()}, reverse=True)
