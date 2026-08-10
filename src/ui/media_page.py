@@ -216,14 +216,19 @@ class MediaPage(QWidget):
         p.addWidget(self.lbl_out)
         p.addLayout(out_row)
 
-        # 注入封面开关
+        # 注入封面：目前仅音乐启用；电影/剧集暂时关闭并隐藏（后续可能开发）
+        is_music = self.kind == "music"
         self.cover_switch = SwitchButton(self._t("cover_inject_label"), self)
-        self.cover_switch.setChecked(bool(self.config.get("music.inject_cover", False)))
+        self.cover_switch.setChecked(
+            is_music and bool(self.config.get("music.inject_cover", False)))
+        self.cover_switch.setVisible(is_music)
         p.addWidget(self.cover_switch)
         cover_row = QHBoxLayout()
         self.cover_edit = LineEdit(self)
         self.cover_edit.setPlaceholderText(self._t("cover_path_label"))
+        self.cover_edit.setVisible(is_music)
         self.btn_cover = PushButton(self)
+        self.btn_cover.setVisible(is_music)
         self.btn_cover.clicked.connect(self._choose_cover)
         cover_row.addWidget(self.cover_edit, 1)
         cover_row.addWidget(self.btn_cover)
@@ -344,17 +349,33 @@ class MediaPage(QWidget):
         """列表为空时显示拖放提示，否则显示表格。"""
         self.drop_stack.setCurrentIndex(0 if not self._paths else 1)
 
+    def showEvent(self, event) -> None:
+        """页面显示时按输出模式刷新"输出目录"输入框的可见性。"""
+        super().showEvent(event)
+        self._update_output_visibility()
+
+    def _update_output_visibility(self) -> None:
+        """自定义模式显示"输出目录"输入框；媒体库模式隐藏（由 Jellyfin 结构决定）。"""
+        is_custom = self.config.get("output.mode", "custom") != "library"
+        self.lbl_out.setVisible(is_custom)
+        self.out_edit.setVisible(is_custom)
+        self.btn_out.setVisible(is_custom)
+
     # ── 处理 ──────────────────────────────────────────────────────────────
 
     def _options(self) -> ProcessingOptions:
         mode = ["rename", "copy", "hardlink"][self.mode_op_combo.currentIndex()]
+        output_mode = self.config.get("output.mode", "custom")
+        roots = self.config.get("output.roots", {}) or {}
         return ProcessingOptions(
             kind=self.kind,
             format=self.fmt_edit.text(),
             mode=mode,
             output_dir=self.out_edit.text().strip() or None,
+            output_mode=output_mode,
+            library_roots=dict(roots) if isinstance(roots, dict) else None,
             language=self.i18n.lang,  # 已解析的实际语言（system 也已解析）
-            inject_cover=self.cover_switch.isChecked(),
+            inject_cover=self.cover_switch.isChecked() if self.kind == "music" else False,
             cover_path=self.cover_edit.text().strip() or None,
         )
 

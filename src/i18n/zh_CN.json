@@ -69,10 +69,17 @@
   "provider_deepseek": "DeepSeek",
   "provider_qwen": "千问",
   "provider_moonshot": "Moonshot（Kimi）",
-  "provider_doubao": "Doubao（豆包）",
-  "provider_zhipu": "Zhipu（智谱）",
+  "provider_doubao": "豆包",
+  "provider_zhipu": "智谱",
   "provider_siliconflow": "SiliconFlow",
   "llm_provider": "提供方",
   "llm_base_url": "Base URL",
-  "ok": "确认"
+  "ok": "确认",
+  "output_mode_label": "输出目录模式",
+  "output_mode_custom": "自定义",
+  "output_mode_library": "媒体库",
+  "output_root_movie": "电影根目录",
+  "output_root_tv": "剧集根目录",
+  "output_root_music": "音乐根目录",
+  "artist_separator_label": "歌手分割符"
 }

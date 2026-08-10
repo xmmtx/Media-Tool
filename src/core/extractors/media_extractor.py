@@ -35,6 +35,22 @@ _QUALITY_RE = re.compile(
 _CODEC_RE = re.compile(r"[hx]\.?26[45]|HEVC|AVC|AV1", re.I)
 _GROUP_RE = re.compile(r"[-\[(]\s*([^-\]()]+?)\s*[\]\s)]*$")
 
+# extras 类型识别：文件名中的标记 → Jellyfin 规范子目录名
+_EXTRAS_PATTERNS = [
+    (r"behind\s+the\s+scenes", "Behind the Scenes"),
+    (r"trailers?", "Trailers"),
+    (r"theme[\s\-_]*(?:music|song)", "Theme Music"),
+    (r"deleted\s+scenes", "Deleted Scenes"),
+    (r"featurettes?", "Featurettes"),
+    (r"interviews?", "Interviews"),
+    (r"samples?", "Samples"),
+    (r"shorts?", "Shorts"),
+]
+
+
+# 已知 extras 类型，供外部校验
+EXTRAS_TYPES = tuple(label for _pat, label in _EXTRAS_PATTERNS)
+
 
 def _to_int(value: object) -> Optional[int]:
     try:
@@ -152,6 +168,15 @@ def _regex_parse(name: str, fullname: str) -> MediaInfo:
         if cand and not _RESOLUTION_RE.search(cand) and not _QUALITY_RE.search(cand):
             info.group = cand
             used.append(gm.group())
+
+    # 识别 extras 标记（如 "Behind the Scenes" / "Trailers" / "Theme Music"），
+    # 从 title 中剥离并记录类型（用于媒体库目录规范）
+    for _pat, label in _EXTRAS_PATTERNS:
+        m = re.search(_pat, base, re.I)
+        if m:
+            info.extra["extras"] = label
+            used.append(m.group())
+            break
 
     # title = 剔除所有已识别片段后清洗剩余文本（保留中文/日文）
     title = base

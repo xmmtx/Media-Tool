@@ -8,8 +8,6 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QDialog,
-    QDialogButtonBox,
-    QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QMessageBox,
@@ -24,6 +22,7 @@ from qfluentwidgets import (
     LineEdit,
     PrimaryPushButton,
     PushButton,
+    StrongBodyLabel,
     SubtitleLabel,
     TableWidget,
     ToolButton,
@@ -41,54 +40,63 @@ class GroupEditDialog(QDialog):
         super().__init__(parent)
         self.i18n = i18n
         self.setWindowTitle(title)
-        self.setMinimumWidth(380)
+        self.setMinimumWidth(400)
         data = group or {}
 
-        form = QFormLayout(self)
-        form.setSpacing(12)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 20, 20, 20)
+        root.setSpacing(10)
 
+        # 全称
+        self.lbl_name = StrongBodyLabel(self._t("groups_name"))
         self.name_edit = LineEdit(self)
         self.name_edit.setText(data.get("name", ""))
+        root.addWidget(self.lbl_name)
+        root.addWidget(self.name_edit)
+
+        # 简称
+        self.lbl_rename = StrongBodyLabel(self._t("groups_rename_to"))
         self.rename_edit = LineEdit(self)
         self.rename_edit.setText(data.get("rename_to", ""))
+        root.addWidget(self.lbl_rename)
+        root.addWidget(self.rename_edit)
 
-        # 别名：已添加行（输入框 + 垃圾桶）+ 底部添加行（加号 + 空输入框）
+        # 别名：已添加行（输入框 + 垃圾桶）+ 底部单个加号按钮
+        self.lbl_aliases = StrongBodyLabel(self._t("groups_aliases"))
         self.aliases_box = QWidget(self)
         self.aliases_lay = QVBoxLayout(self.aliases_box)
         self.aliases_lay.setContentsMargins(0, 0, 0, 0)
-        self.aliases_lay.setSpacing(4)
+        self.aliases_lay.setSpacing(6)
         self._alias_rows = []  # List[(row_widget, LineEdit)]
         for a in (data.get("aliases") or []):
             self._add_alias_row(str(a))
-        # 底部：加号 + 空输入框，输入后点加号固化为一条别名
-        add_row = QWidget(self)
-        h = QHBoxLayout(add_row)
-        h.setContentsMargins(0, 0, 0, 0)
-        self.btn_add_alias = ToolButton(FluentIcon.ADD, add_row)
+        # 底部加号：点击后在它上方出现一条输入框，加号保持在下方
+        self.btn_add_alias = ToolButton(FluentIcon.ADD, self.aliases_box)
+        self.btn_add_alias.setFixedSize(32, 32)
         self.btn_add_alias.setToolTip(self._t("groups_add_alias"))
-        self.new_alias_edit = LineEdit(add_row)
-        self.btn_add_alias.clicked.connect(self._commit_new_alias)
-        h.addWidget(self.btn_add_alias)
-        h.addWidget(self.new_alias_edit, 1)
-        self.aliases_lay.addWidget(add_row)
+        self.btn_add_alias.clicked.connect(lambda: self._add_alias_row(""))
+        self.aliases_lay.addWidget(self.btn_add_alias)
+        root.addWidget(self.lbl_aliases)
+        root.addWidget(self.aliases_box)
 
-        form.addRow(self._t("groups_name"), self.name_edit)
-        form.addRow(self._t("groups_rename_to"), self.rename_edit)
-        form.addRow(self._t("groups_aliases"), self.aliases_box)
-
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(self._t("ok"))
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(self._t("cancel"))
-        form.addRow(buttons)
+        # 按钮行：取消（普通）+ 确定（高亮）
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        self.btn_cancel = PushButton(self)
+        self.btn_cancel.setText(self._t("cancel"))
+        self.btn_cancel.clicked.connect(self.reject)
+        self.btn_ok = PrimaryPushButton(self)
+        self.btn_ok.setText(self._t("ok"))
+        self.btn_ok.clicked.connect(self.accept)
+        btn_row.addWidget(self.btn_cancel)
+        btn_row.addWidget(self.btn_ok)
+        root.addLayout(btn_row)
 
     def _t(self, key: str, **kw) -> str:
         return self.i18n.t(key, **kw)
 
     def _add_alias_row(self, text: str = "") -> None:
-        """追加一行已添加别名（输入框 + 垃圾桶），插到底部添加行之前。"""
+        """追加一行已添加别名（输入框 + 垃圾桶），插到加号按钮之前。"""
         row = QWidget(self)
         h = QHBoxLayout(row)
         h.setContentsMargins(0, 0, 0, 0)
@@ -103,15 +111,8 @@ class GroupEditDialog(QDialog):
         self.aliases_lay.insertWidget(self.aliases_lay.count() - 1, row)
         self._alias_rows.append((row, edit))
 
-    def _commit_new_alias(self) -> None:
-        """把底部输入框内容固化为一条已添加别名。"""
-        text = self.new_alias_edit.text().strip()
-        if text:
-            self._add_alias_row(text)
-            self.new_alias_edit.clear()
-
     def _remove_alias_row(self, row) -> None:
-        """删除一行别名（可删至 0 行，底部仍有添加入口）。"""
+        """删除一行别名（可删至 0 行，底部仍有加号添加入口）。"""
         self.aliases_lay.removeWidget(row)
         row.deleteLater()
         self._alias_rows = [(r, e) for r, e in self._alias_rows if r is not row]

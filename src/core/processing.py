@@ -57,7 +57,9 @@ class ProcessingOptions:
     kind: str                    # movie | tv | music
     format: str                  # 表达式（如 "{title_orig} ({year}) - [{group}]"）
     mode: str = "rename"         # rename | copy | hardlink
-    output_dir: Optional[str] = None  # 目标目录（None = 源文件所在目录）
+    output_dir: Optional[str] = None  # 自定义模式目标目录（None = 源目录）
+    output_mode: str = "custom"  # custom | library（媒体库 Jellyfin 结构）
+    library_roots: Optional[Dict[str, str]] = None  # {"movie","tv","music"} 根目录
     language: str = "zh-CN"
     inject_cover: bool = False   # 音乐：是否注入封面
     cover_path: Optional[str] = None  # 封面图片路径，或源音乐文件路径（自动识别）
@@ -222,7 +224,8 @@ class Processor:
         needed = required_fields(options.format)
         tags = read_music_tags(item.path)
         title = (tags.get("title") or [""])[0].strip()
-        artists = split_artists(tags.get("artist"))
+        artists = split_artists(tags.get("artist"),
+                                self.config.get("music.artist_separators", ""))
         if not title or not artists:
             return self._to_manual(item, "missing title/artist in metadata tags")
 
@@ -306,9 +309,7 @@ class Processor:
         if not new_base:
             return self._to_manual(item, "format produced empty name")
         item.new_name = sanitize_filename(new_base) + ext
-        dst_dir = os.path.abspath(options.output_dir) if options.output_dir \
-            else os.path.dirname(os.path.abspath(item.path))
-        dst = os.path.join(dst_dir, item.new_name)
+        dst = self._build_dst(item, options, values, ext)
         result = self._apply_op(item.path, dst, options.mode)
         if not result.ok:
             item.status = "error"
@@ -323,6 +324,63 @@ class Processor:
                 return item
         item.status = "ok"
         return item
+
+    # ── 目标路径构建（自定义 / 媒体库 Jellyfin 结构） ──────────────────────
+
+    def _build_dst(self, item: QueueItem, options: ProcessingOptions,
+                   values: Dict[str, object], ext: str) -> str:
+        """构建目标文件完整路径。
+
+        - ``library``：按 Jellyfin 规范（含 extras 子目录）落到对应根目录下。
+        - ``custom``：落到自定义输出目录（或源目录）。
+        """
+        if options.output_mode == "library" and options.library_roots:
+            root = options.library_roots.get(item.kind)
+            if root:
+                rel = self._library_rel_path(item, values, ext)
+                return os.path.join(root, rel)
+        dst_dir = os.path.abspath(options.output_dir) if options.output_dir \
+            else os.path.dirname(os.path.abspath(item.path))
+        return os.path.join(dst_dir, item.new_name)
+
+    def _library_rel_path(self, item: QueueItem, values: Dict[str, object],
+                          ext: str) -> str:
+        """按 Jellyfin 规范构建媒体库内的相对路径 + 文件名。
+
+        - 电影: ``Movies/T (2009)/T (2009).ext``（extras 进 ``/ExtrasType/``）
+        - 剧集: ``TV/S (2009)/Season 01/S S01E01.ext``
+        - 音乐: ``Music/Artist/Album/NN - Title.ext``
+        """
+        info = item.info
+        extras = (info.extra or {}).get("extras") if info else None
+        title = str(values.get("title_orig") or (info.title if info else "") or "Unknown")
+        title = sanitize_filename(title)
+        year = values.get("year") or (info.year if info else None)
+        folder = f"{title} ({year})" if year else title
+
+        if item.kind == "movie":
+            name = f"{folder}{ext}"
+        elif item.kind == "tv":
+            season = int(values.get("season") or (info.season if info else 1))
+            episode = int(values.get("episode") or (info.episode if info else 1))
+            folder = os.path.join(folder, f"Season {season:02d}")
+            name = f"{title} S{season:02d}E{episode:02d}{ext}"
+        else:  # music
+            artist = sanitize_filename(str(values.get("artist") or "Unknown Artist"))
+            album = sanitize_filename(str(values.get("album") or "Unknown Album"))
+            folder = os.path.join(artist, album)
+            prefix = ""
+            track = values.get("track")
+            if track:
+                try:
+                    prefix = f"{int(str(track).split('/')[0]):02d} - "
+                except (TypeError, ValueError):
+                    prefix = ""
+            name = f"{prefix}{sanitize_filename(str(values.get('title') or 'Unknown'))}{ext}"
+
+        if extras:
+            folder = os.path.join(folder, extras)
+        return os.path.join(folder, name)
 
     def _apply_op(self, src: str, dst: str, mode: str) -> OperationResult:
         if mode == "rename":

@@ -8,8 +8,8 @@
   "process": "Process",
   "undo": "Undo",
   "cancel": "Cancel",
-  "mode_movie": "Movie",
-  "mode_tv": "TV / Anime",
+  "mode_movie": "Movies",
+  "mode_tv": "TV Shows",
   "mode_music": "Music",
   "mode_rename": "Rename",
   "mode_copy": "Copy",
@@ -74,5 +74,12 @@
   "provider_siliconflow": "SiliconFlow",
   "llm_provider": "Provider",
   "llm_base_url": "Base URL",
-  "ok": "OK"
+  "ok": "OK",
+  "output_mode_label": "Output Directory Mode",
+  "output_mode_custom": "Custom",
+  "output_mode_library": "Media Library",
+  "output_root_movie": "Movies Root",
+  "output_root_tv": "TV Shows Root",
+  "output_root_music": "Music Root",
+  "artist_separator_label": "Artist Separators"
 }

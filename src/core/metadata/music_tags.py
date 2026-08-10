@@ -62,21 +62,27 @@ def _open_audio(path: str, easy: bool = True):
 
 # ── 艺术家拆分（纯函数）───────────────────────────────────────────────────
 
-def split_artists(text: Union[str, List[str], None]) -> List[str]:
+def split_artists(text: Union[str, List[str], None],
+                  separators: Optional[str] = None) -> List[str]:
     """拆分多艺术家字符串。
 
-    支持中文顿号（``、``）、全/半角逗号（``,``/``，``）、斜杠（``/``）
-    及分号（``;``/``；``）作为分隔符。``&``/``和``/``与`` 不拆分
+    默认分隔符为中文顿号（``、``）、全/半角逗号（``,``/``，``）、
+    斜杠（``/``）及分号（``;``/``；``）；传入 ``separators``（字符集合，
+    如 ``"、,，"``）时改用自定义分隔符。``&``/``和``/``与`` 不拆分
     （通常是乐队名的一部分）。去重、去空白。
     """
     if text is None:
         return []
+    if separators:
+        pattern = "[" + "".join(re.escape(c) for c in separators) + "]"
+    else:
+        pattern = r"[、,，/;；]"
     if isinstance(text, list):
         pieces: List[str] = []
         for x in text:
-            pieces.extend(re.split(r"[、,，/;；]", str(x)))
+            pieces.extend(re.split(pattern, str(x)))
     else:
-        pieces = re.split(r"[、,，/;；]", str(text))
+        pieces = re.split(pattern, str(text))
     result: List[str] = []
     for p in pieces:
         p = p.strip()

@@ -12,7 +12,7 @@ from typing import Dict, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal, QEvent
 from PyQt6.QtGui import QFontDatabase
-from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QFileDialog, QHBoxLayout, QVBoxLayout, QWidget
 
 from qfluentwidgets import (
     CardWidget,
@@ -151,6 +151,47 @@ class SettingsPage(QWidget):
         lay.addWidget(self.lbl_llm_model)
         lay.addWidget(self.llm_model_edit)
 
+        # ── 输出目录 ──────────────────────────────────────────────
+        self.lbl_output_mode = StrongBodyLabel(self._t("output_mode_label"))
+        self.output_mode_combo = ComboBox(self)
+        self.output_mode_combo.addItem(self._t("output_mode_custom"), userData="custom")
+        self.output_mode_combo.addItem(self._t("output_mode_library"), userData="library")
+        self.output_mode_combo.currentIndexChanged.connect(self._on_output_mode_changed)
+        lay.addWidget(self.lbl_output_mode)
+        lay.addWidget(self.output_mode_combo)
+
+        # 媒体库根目录（仅 library 模式显示）
+        self.roots_box = QWidget(self)
+        rl = QVBoxLayout(self.roots_box)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(6)
+        self.root_labels: Dict[str, StrongBodyLabel] = {}
+        self.root_edits: Dict[str, LineEdit] = {}
+        self.root_btns: Dict[str, PushButton] = {}
+        for code in ("movie", "tv", "music"):
+            row = QHBoxLayout()
+            lbl = StrongBodyLabel(self._t("output_root_" + code))
+            edit = LineEdit(self)
+            btn = PushButton(self)
+            btn.setText("…")
+            btn.clicked.connect(lambda _=False, c=code: self._choose_root(c))
+            row.addWidget(lbl)
+            row.addWidget(edit, 1)
+            row.addWidget(btn)
+            rl.addLayout(row)
+            self.root_labels[code] = lbl
+            self.root_edits[code] = edit
+            self.root_btns[code] = btn
+        lay.addWidget(self.roots_box)
+
+        # ── 音乐 ──────────────────────────────────────────────────
+        self.lbl_artist_sep = StrongBodyLabel(self._t("artist_separator_label"))
+        self.artist_sep_edit = LineEdit(self)
+        self.artist_sep_edit.setPlaceholderText("、,，")
+        self.artist_sep_edit.textChanged.connect(self._mark_dirty)
+        lay.addWidget(self.lbl_artist_sep)
+        lay.addWidget(self.artist_sep_edit)
+
         # ── 底部按钮行（右下角）：保存 + 取消 ──────────────────────
         btn_row = QHBoxLayout()
         btn_row.addStretch()
@@ -178,6 +219,14 @@ class SettingsPage(QWidget):
         self.lbl_llm_model.setText(self._t("settings_llm_model"))
         self.btn_save.setText(self._t("settings_save"))
         self.btn_cancel.setText(self._t("settings_cancel"))
+        self.lbl_output_mode.setText(self._t("output_mode_label"))
+        self.output_mode_combo.blockSignals(True)
+        self.output_mode_combo.setItemText(0, self._t("output_mode_custom"))
+        self.output_mode_combo.setItemText(1, self._t("output_mode_library"))
+        self.output_mode_combo.blockSignals(False)
+        for code in ("movie", "tv", "music"):
+            self.root_labels[code].setText(self._t("output_root_" + code))
+        self.lbl_artist_sep.setText(self._t("artist_separator_label"))
         # 语言下拉：更新"跟随系统"文案并保持选中
         cur = self.lang_combo.currentData() or self.config.get("language", "zh_CN")
         self.lang_combo.blockSignals(True)
@@ -221,6 +270,22 @@ class SettingsPage(QWidget):
         name = bundled_font_family() or "System"
         return self._t("settings_font_default", name=name)
 
+    # ── 输出目录 / 音乐辅助 ──────────────────────────────────────────────
+
+    def _on_output_mode_changed(self, _idx: int) -> None:
+        self._update_roots_visibility()
+        self._mark_dirty()
+
+    def _update_roots_visibility(self) -> None:
+        is_library = self.output_mode_combo.currentData() == "library"
+        self.roots_box.setVisible(is_library)
+
+    def _choose_root(self, code: str) -> None:
+        folder = QFileDialog.getExistingDirectory(self, self._t("output_root_" + code))
+        if folder:
+            self.root_edits[code].setText(folder)
+            self._mark_dirty()
+
     # ── 快照 / 改动检测 / 保存 / 取消 ────────────────────────────────────
 
     def _snapshot(self) -> Dict:
@@ -234,6 +299,11 @@ class SettingsPage(QWidget):
             "llm.base_url": self.config.get("llm.base_url", ""),
             "llm.api_key": self.config.get("llm.api_key", ""),
             "llm.model": self.config.get("llm.model", ""),
+            "output.mode": self.config.get("output.mode", "custom"),
+            "output.roots.movie": (self.config.get("output.roots", {}) or {}).get("movie", ""),
+            "output.roots.tv": (self.config.get("output.roots", {}) or {}).get("tv", ""),
+            "output.roots.music": (self.config.get("output.roots", {}) or {}).get("music", ""),
+            "music.artist_separators": self.config.get("music.artist_separators", ""),
         }
 
     def _current(self) -> Dict:
@@ -248,6 +318,11 @@ class SettingsPage(QWidget):
             "llm.base_url": self.llm_base_edit.text().strip(),
             "llm.api_key": self.llm_key_edit.text().strip(),
             "llm.model": self.llm_model_edit.text().strip(),
+            "output.mode": self.output_mode_combo.currentData() or "custom",
+            "output.roots.movie": self.root_edits["movie"].text().strip(),
+            "output.roots.tv": self.root_edits["tv"].text().strip(),
+            "output.roots.music": self.root_edits["music"].text().strip(),
+            "music.artist_separators": self.artist_sep_edit.text().strip(),
         }
 
     def _mark_dirty(self, *_args) -> None:
@@ -295,6 +370,21 @@ class SettingsPage(QWidget):
         self.llm_model_edit.setText(self.config.get("llm.model", ""))
         self.llm_model_edit.blockSignals(False)
 
+        om = self.config.get("output.mode", "custom")
+        om_idx = self._index_of_data(self.output_mode_combo, om)
+        self.output_mode_combo.blockSignals(True)
+        self.output_mode_combo.setCurrentIndex(om_idx if om_idx >= 0 else 0)
+        self.output_mode_combo.blockSignals(False)
+        roots = self.config.get("output.roots", {}) or {}
+        for code in ("movie", "tv", "music"):
+            self.root_edits[code].blockSignals(True)
+            self.root_edits[code].setText(str(roots.get(code, "")))
+            self.root_edits[code].blockSignals(False)
+        self.artist_sep_edit.blockSignals(True)
+        self.artist_sep_edit.setText(self.config.get("music.artist_separators", ""))
+        self.artist_sep_edit.blockSignals(False)
+        self._update_roots_visibility()
+
     def _save(self) -> None:
         """保存全部设置到 config.json；语言/字体变化时应用并广播。"""
         lang = self.lang_combo.currentData() or "zh_CN"
@@ -310,6 +400,14 @@ class SettingsPage(QWidget):
         self.config.set("llm.base_url", self.llm_base_edit.text().strip())
         self.config.set("llm.api_key", self.llm_key_edit.text().strip())
         self.config.set("llm.model", self.llm_model_edit.text().strip())
+        roots = {
+            "movie": self.root_edits["movie"].text().strip(),
+            "tv": self.root_edits["tv"].text().strip(),
+            "music": self.root_edits["music"].text().strip(),
+        }
+        self.config.set("output.mode", self.output_mode_combo.currentData() or "custom")
+        self.config.set("output.roots", roots)
+        self.config.set("music.artist_separators", self.artist_sep_edit.text().strip())
 
         self._saved = self._snapshot()
         self.btn_save.setEnabled(False)
