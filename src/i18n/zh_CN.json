@@ -34,5 +34,21 @@
   "err_title": "错误",
   "col_old_name": "原文件名",
   "col_new_name": "新文件名",
-  "col_status": "状态"
+  "col_status": "状态",
+  "nav_groups": "组列表",
+  "nav_settings": "设置",
+  "refresh": "刷新",
+  "groups_count": "共 {count} 个组",
+  "col_group_name": "组名",
+  "col_group_aliases": "别名",
+  "col_group_source": "来源",
+  "settings_language": "界面语言",
+  "settings_tmdb": "TMDB API Key",
+  "settings_tmdb_ph": "粘贴 TMDB API Key…",
+  "settings_llm": "LLM 配置",
+  "settings_llm_enable": "启用 LLM",
+  "settings_llm_api_key": "LLM API Key",
+  "settings_llm_model": "模型名称",
+  "settings_save": "保存设置",
+  "settings_saved": "已保存"
 }

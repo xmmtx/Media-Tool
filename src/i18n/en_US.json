@@ -34,5 +34,21 @@
   "err_title": "Error",
   "col_old_name": "Original Name",
   "col_new_name": "New Name",
-  "col_status": "Status"
+  "col_status": "Status",
+  "nav_groups": "Groups",
+  "nav_settings": "Settings",
+  "refresh": "Refresh",
+  "groups_count": "{count} groups",
+  "col_group_name": "Group",
+  "col_group_aliases": "Aliases",
+  "col_group_source": "Source",
+  "settings_language": "Interface Language",
+  "settings_tmdb": "TMDB API Key",
+  "settings_tmdb_ph": "Paste TMDB API Key…",
+  "settings_llm": "LLM Settings",
+  "settings_llm_enable": "Enable LLM",
+  "settings_llm_api_key": "LLM API Key",
+  "settings_llm_model": "Model",
+  "settings_save": "Save Settings",
+  "settings_saved": "Saved"
 }
