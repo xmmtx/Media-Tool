@@ -2,7 +2,7 @@
 
 每个组记录区分两个名称概念：
 
-- ``rename_to`` — 重命名后输出到文件名的名称（规范化后的名称）。
+- ``rename_to`` — 重命名后输出到文件名的名称（简称，规范化后的名称）。
 - ``aliases`` — 可被识别的名称列表（含中文/英文等变体，用于从文件名中匹配该组）。
 
 数据结构（``subgroups.json``）::
@@ -12,14 +12,12 @@
         "NekomoeKissaten": {
           "rename_to": "NekomoeKissaten",
           "aliases": ["喵萌", "喵萌字幕组"],
-          "source": "llm",            # llm | manual | seed
           "added": "2026-08-09"
         }
       }
     }
 
-- ``source`` 记录该组是来自 LLM 识别、手动干预还是种子数据。
-- ``recognize(text)`` 在 ``aliases`` 及主键中做大小写/特殊字符无关的模糊匹配，
+- ``recognize(text)`` 在 ``aliases``、``rename_to`` 及主键中做大小写/特殊字符无关的模糊匹配，
   返回内部主键；``display_name(key)`` 再取回该组应写入文件名的名称。
 """
 
@@ -104,16 +102,15 @@ class SubgroupStore(JsonStore):
         self,
         name: str,
         aliases: Optional[List[str]] = None,
-        source: str = "manual",
         rename_to: Optional[str] = None,
     ) -> bool:
         """新增一个组。
 
-        - ``name``: 内部唯一标识（主键）。
-        - ``rename_to``: 重命名后输出到文件名的名称；省略时等于 ``name``。
+        - ``name``: 内部唯一标识（主键，即全称）。
+        - ``rename_to``: 重命名后输出到文件名的名称（简称）；省略时等于 ``name``。
         - ``aliases``: 可被识别的名称列表（用于从文件名中匹配该组）。
 
-        若已存在则合并别名并保留原来源，返回 ``False``。
+        若已存在则合并别名并保留原简称，返回 ``False``。
         """
         if not name:
             return False
@@ -128,13 +125,11 @@ class SubgroupStore(JsonStore):
                     if a not in existing["aliases"]:
                         existing["aliases"].append(a)
                 existing.setdefault("rename_to", output)
-                existing.setdefault("source", source)
                 self.save()
                 return False
             groups[name] = {
                 "rename_to": output,
                 "aliases": clean_aliases,
-                "source": source,
                 "added": date.today().isoformat(),
             }
             self.save()
@@ -157,7 +152,6 @@ class SubgroupStore(JsonStore):
         name: str,
         rename_to: Optional[str] = None,
         aliases: Optional[List[str]] = None,
-        source: Optional[str] = None,
     ) -> bool:
         """更新已有组的信息（只覆盖传入的字段）。"""
         if name not in self.data["groups"]:
@@ -168,8 +162,6 @@ class SubgroupStore(JsonStore):
                 meta["rename_to"] = rename_to or name
             if aliases is not None:
                 meta["aliases"] = list(dict.fromkeys(a for a in aliases if a))
-            if source is not None:
-                meta["source"] = source
             self.save()
             return True
 

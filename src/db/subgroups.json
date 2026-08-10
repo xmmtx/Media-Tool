@@ -3,7 +3,6 @@
     "新之助": {
       "rename_to": "新之助",
       "aliases": [],
-      "source": "manual",
       "added": "2026-08-09"
     },
     "VCB-Studio": {
@@ -11,7 +10,6 @@
       "aliases": [
         "VCB-Studio"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "7³ACG": {
@@ -20,7 +18,6 @@
         "7³ACG",
         "7_3_ACG"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "GM-Team": {
@@ -29,7 +26,6 @@
         "GM-Team",
         "GMTeam"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "ANi": {
@@ -38,7 +34,6 @@
         "ANi",
         "ANiTorrent"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "LoliHouse": {
@@ -46,7 +41,6 @@
       "aliases": [
         "LoliHouse"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "桜都字幕组": {
@@ -55,7 +49,6 @@
         "桜都字幕组",
         "樱都字幕组"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "北宇治字幕组": {
@@ -64,7 +57,6 @@
         "北宇治字幕组",
         "Kitauji"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "天月動漫&發佈組": {
@@ -73,7 +65,6 @@
         "天月動漫&發佈組",
         "Skymoon-Raws"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "喵萌奶茶屋": {
@@ -83,7 +74,6 @@
         "NekomoeKissaten",
         "nekomoekissaten"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "驯兽师联盟": {
@@ -93,7 +83,6 @@
         "馴獸師聯盟",
         "Hanada"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "三明治摆烂组": {
@@ -101,7 +90,6 @@
       "aliases": [
         "三明治摆烂组"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "TSDM字幕组": {
@@ -111,7 +99,6 @@
         "TSDM字幕組",
         "天使动漫"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "极影字幕社": {
@@ -120,7 +107,6 @@
         "极影字幕社",
         "极影字幕·毁片党"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "猎户发布组": {
@@ -129,7 +115,6 @@
         "猎户发布组",
         "猎户压制部"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "爱恋字幕社": {
@@ -139,7 +124,6 @@
         "爱恋&猫恋汉化组",
         "KissSub"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "猫恋汉化组": {
@@ -147,7 +131,6 @@
       "aliases": [
         "猫恋汉化组"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "追放字幕组": {
@@ -156,7 +139,6 @@
         "追放字幕组",
         "ExileSub"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "雪飄工作室": {
@@ -166,7 +148,6 @@
         "雪飘工作室",
         "FLsnow"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "绿茶字幕组": {
@@ -175,7 +156,6 @@
         "绿茶字幕组",
         "綠茶字幕組"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "百冬練習組": {
@@ -184,7 +164,6 @@
         "百冬練習組",
         "百冬练习组"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "Prejudice-Studio": {
@@ -192,7 +171,6 @@
       "aliases": [
         "Prejudice-Studio"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "咪路fans制作组": {
@@ -200,7 +178,6 @@
       "aliases": [
         "咪路fans制作组"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "Zzz睡不醒": {
@@ -208,7 +185,6 @@
       "aliases": [
         "Zzz睡不醒"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "魔星字幕团": {
@@ -217,7 +193,6 @@
         "魔星字幕团",
         "MagicStar"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "银色子弹字幕组": {
@@ -225,7 +200,6 @@
       "aliases": [
         "银色子弹字幕组"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "豌豆字幕组": {
@@ -233,7 +207,6 @@
       "aliases": [
         "豌豆字幕组"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "风之圣殿字幕组": {
@@ -241,7 +214,6 @@
       "aliases": [
         "风之圣殿字幕组"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     },
     "ReinForce": {
@@ -249,7 +221,6 @@
       "aliases": [
         "ReinForce"
       ],
-      "source": "seed",
       "added": "2026-08-10"
     }
   }

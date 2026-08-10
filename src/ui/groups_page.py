@@ -20,18 +20,17 @@ from PyQt6.QtWidgets import (
 
 from qfluentwidgets import (
     BodyLabel,
-    ComboBox,
+    FluentIcon,
     LineEdit,
     PrimaryPushButton,
     PushButton,
     SubtitleLabel,
     TableWidget,
+    ToolButton,
 )
 
 from db import SubgroupStore
 from i18n import I18n
-
-_SOURCES = ("manual", "seed", "llm")
 
 
 class GroupEditDialog(QDialog):
@@ -52,28 +51,30 @@ class GroupEditDialog(QDialog):
         self.name_edit.setText(data.get("name", ""))
         self.rename_edit = LineEdit(self)
         self.rename_edit.setText(data.get("rename_to", ""))
-        self.source_combo = ComboBox(self)
-        for s in _SOURCES:
-            self.source_combo.addItem(s)
-        self.source_combo.setCurrentText(data.get("source", "manual"))
 
-        # 别名：动态多行（每行一个输入框 + 删除按钮，点加号追加新行）
+        # 别名：已添加行（输入框 + 垃圾桶）+ 底部添加行（加号 + 空输入框）
         self.aliases_box = QWidget(self)
         self.aliases_lay = QVBoxLayout(self.aliases_box)
         self.aliases_lay.setContentsMargins(0, 0, 0, 0)
         self.aliases_lay.setSpacing(4)
         self._alias_rows = []  # List[(row_widget, LineEdit)]
-        initial = data.get("aliases") or [""]
-        for a in initial:
+        for a in (data.get("aliases") or []):
             self._add_alias_row(str(a))
-        self.btn_add_alias = PushButton(self)
-        self.btn_add_alias.clicked.connect(lambda: self._add_alias_row(""))
-        self.aliases_lay.addWidget(self.btn_add_alias)
+        # 底部：加号 + 空输入框，输入后点加号固化为一条别名
+        add_row = QWidget(self)
+        h = QHBoxLayout(add_row)
+        h.setContentsMargins(0, 0, 0, 0)
+        self.btn_add_alias = ToolButton(FluentIcon.ADD, add_row)
+        self.btn_add_alias.setToolTip(self._t("groups_add_alias"))
+        self.new_alias_edit = LineEdit(add_row)
+        self.btn_add_alias.clicked.connect(self._commit_new_alias)
+        h.addWidget(self.btn_add_alias)
+        h.addWidget(self.new_alias_edit, 1)
+        self.aliases_lay.addWidget(add_row)
 
         form.addRow(self._t("groups_name"), self.name_edit)
         form.addRow(self._t("groups_rename_to"), self.rename_edit)
         form.addRow(self._t("groups_aliases"), self.aliases_box)
-        form.addRow(self._t("groups_source"), self.source_combo)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -87,15 +88,14 @@ class GroupEditDialog(QDialog):
         return self.i18n.t(key, **kw)
 
     def _add_alias_row(self, text: str = "") -> None:
-        """追加一行别名输入框（带删除按钮），插到"添加别名"按钮之前。"""
+        """追加一行已添加别名（输入框 + 垃圾桶），插到底部添加行之前。"""
         row = QWidget(self)
         h = QHBoxLayout(row)
         h.setContentsMargins(0, 0, 0, 0)
         edit = LineEdit(row)
         edit.setText(text)
-        btn = PushButton(row)
-        btn.setText("－")
-        btn.setFixedWidth(36)
+        btn = ToolButton(FluentIcon.DELETE, row)
+        btn.setFixedSize(30, 30)
         btn.setToolTip(self._t("groups_remove_alias"))
         btn.clicked.connect(lambda _=False, r=row: self._remove_alias_row(r))
         h.addWidget(edit, 1)
@@ -103,12 +103,15 @@ class GroupEditDialog(QDialog):
         self.aliases_lay.insertWidget(self.aliases_lay.count() - 1, row)
         self._alias_rows.append((row, edit))
 
+    def _commit_new_alias(self) -> None:
+        """把底部输入框内容固化为一条已添加别名。"""
+        text = self.new_alias_edit.text().strip()
+        if text:
+            self._add_alias_row(text)
+            self.new_alias_edit.clear()
+
     def _remove_alias_row(self, row) -> None:
-        """删除一行别名；至少保留一行（此时清空文本）。"""
-        if len(self._alias_rows) <= 1:
-            _r, edit = self._alias_rows[0]
-            edit.setText("")
-            return
+        """删除一行别名（可删至 0 行，底部仍有添加入口）。"""
         self.aliases_lay.removeWidget(row)
         row.deleteLater()
         self._alias_rows = [(r, e) for r, e in self._alias_rows if r is not row]
@@ -119,7 +122,6 @@ class GroupEditDialog(QDialog):
             "name": self.name_edit.text().strip(),
             "rename_to": self.rename_edit.text().strip(),
             "aliases": aliases,
-            "source": self.source_combo.currentText(),
         }
 
 
@@ -228,7 +230,6 @@ class GroupsPage(QWidget):
             if v["name"]:
                 self.subgroups.add(
                     v["name"], aliases=v["aliases"],
-                    source=v["source"] or "manual",
                     rename_to=v["rename_to"] or None)
                 self.reload()
 
@@ -241,7 +242,6 @@ class GroupsPage(QWidget):
             "name": key,
             "rename_to": meta.get("rename_to", ""),
             "aliases": meta.get("aliases", []),
-            "source": meta.get("source", "manual"),
         }
         dlg = GroupEditDialog(self._t("groups_edit"), self.i18n, group=data, parent=self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
@@ -254,12 +254,11 @@ class GroupsPage(QWidget):
             self.subgroups.remove(key)
             self.subgroups.add(
                 v["name"], aliases=v["aliases"],
-                source=v["source"] or "manual",
                 rename_to=v["rename_to"] or None)
         else:
             self.subgroups.update(
                 key, rename_to=v["rename_to"] or None,
-                aliases=v["aliases"], source=v["source"] or None)
+                aliases=v["aliases"])
         self.reload()
 
     def _delete_group(self) -> None:

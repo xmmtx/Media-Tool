@@ -90,6 +90,9 @@ class MainWindow(FluentWindow):
             self.settings_page, FluentIcon.SETTING, self._t("nav_settings"),
             position=NavigationItemPosition.BOTTOM)
 
+        # 缩窄左侧导航栏，使其刚好容纳导航文字（默认 322px 过宽）
+        self.navigationInterface.setExpandWidth(200)
+
     # ── 语言切换 / 重译 ───────────────────────────────────────────────────
 
     def _on_language_changed(self, code: str) -> None:

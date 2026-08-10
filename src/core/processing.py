@@ -264,7 +264,7 @@ class Processor:
         if self.llm.available:
             result = self.llm.parse_subgroup(raw)
             if result:
-                self.subgroups.add(result["subgroup"], result["aliases"], source="llm")
+                self.subgroups.add(result["subgroup"], result["aliases"])
                 return result["subgroup"]
         return None
 
