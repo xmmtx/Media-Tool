@@ -100,5 +100,17 @@
   "col_season": "季編號",
   "col_episode": "集編號",
   "col_episode_title": "集標題",
-  "manual_matched": "已匹配 {count} 集"
+  "manual_matched": "已匹配 {count} 集",
+  "st_pending": "待處理",
+  "st_ok": "成功",
+  "st_manual": "手動介入",
+  "st_error": "錯誤",
+  "reason_subgroup": "字幕組未識別",
+  "reason_parse_se_ep": "無法解析季/集",
+  "reason_parse_title": "無法從檔名解析標題",
+  "reason_no_movie": "無 TMDB 電影相符",
+  "reason_no_tv": "無 TMDB 劇集相符",
+  "reason_tv_type": "無法判定劇集類型（番劇/電視劇/紀錄片）",
+  "reason_missing_tags": "中繼資料缺少標題/藝術家",
+  "reason_empty_name": "格式產生空檔名"
 }

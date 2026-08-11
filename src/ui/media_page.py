@@ -57,6 +57,18 @@ DEFAULT_FORMATS = {
     "music": "{artist} - {title}",
 }
 
+# processing 产生的英文 manual 原因 → i18n key
+_REASON_KEYS = {
+    "subgroup not recognized": "reason_subgroup",
+    "cannot parse season/episode": "reason_parse_se_ep",
+    "cannot parse title from filename": "reason_parse_title",
+    "no TMDB movie match": "reason_no_movie",
+    "no TMDB TV match": "reason_no_tv",
+    "cannot determine TV type (anime/drama/documentary)": "reason_tv_type",
+    "missing title/artist in metadata tags": "reason_missing_tags",
+    "format produced empty name": "reason_empty_name",
+}
+
 
 class ProcessingThread(QThread):
     """后台线程：匹配（dry_run）或执行（pending 项）。
@@ -165,6 +177,11 @@ class MediaPage(QWidget):
 
     def _t(self, key: str, **kw) -> str:
         return self.i18n.t(key, **kw)
+
+    def _i18n_reason(self, reason: str) -> str:
+        """把 processing 产生的英文 reason 映射为本地化文案。"""
+        key = _REASON_KEYS.get(reason)
+        return self._t(key) if key else reason
 
     # ── UI 构建 ───────────────────────────────────────────────────────────
 
@@ -560,12 +577,12 @@ class MediaPage(QWidget):
             return
         self.table.item(row, 1).setText(item.new_name)
         status_item = self.table.item(row, 2)
-        # manual 时在状态列附带原因（如 subgroup not recognized），便于定位问题
-        status_text = item.status
+        # 状态 + manual 原因均 i18n
+        status_text = self._t("st_" + item.status)
         if item.status == "manual" and item.reason:
-            status_text = f"{item.status}: {item.reason}"
+            status_text = f"{status_text}: {self._i18n_reason(item.reason)}"
         status_item.setText(status_text)
-        status_item.setToolTip(item.reason or "")
+        status_item.setToolTip(self._i18n_reason(item.reason) if item.reason else "")
         status_item.setForeground(
             Qt.GlobalColor.green if item.status == "ok"
             else Qt.GlobalColor.red if item.status == "error"

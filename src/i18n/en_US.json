@@ -98,5 +98,17 @@
   "col_season": "Season",
   "col_episode": "Episode",
   "col_episode_title": "Title",
-  "manual_matched": "Matched {count} episodes"
+  "manual_matched": "Matched {count} episodes",
+  "st_pending": "Pending",
+  "st_ok": "OK",
+  "st_manual": "Manual",
+  "st_error": "Error",
+  "reason_subgroup": "subgroup not recognized",
+  "reason_parse_se_ep": "cannot parse season/episode",
+  "reason_parse_title": "cannot parse title from filename",
+  "reason_no_movie": "no TMDB movie match",
+  "reason_no_tv": "no TMDB TV match",
+  "reason_tv_type": "cannot determine TV type (anime/drama/documentary)",
+  "reason_missing_tags": "missing title/artist in metadata tags",
+  "reason_empty_name": "format produced empty name"
 }

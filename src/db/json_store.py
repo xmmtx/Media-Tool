@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import threading
@@ -31,9 +32,11 @@ class JsonStore:
     ) -> None:
         self.path = Path(path)
         self.indent = indent
-        self._default = default_data
+        # 深拷贝默认数据：避免多个实例共享类级默认 dict，导致某个实例的
+        # set() 污染其他实例（乃至类属性）的默认值
+        self._default = copy.deepcopy(default_data) if default_data is not None else None
+        self._data = copy.deepcopy(default_data) if default_data is not None else {}
         self._lock = threading.RLock()
-        self._data: Union[Dict, list] = default_data if default_data is not None else {}
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.load()
 

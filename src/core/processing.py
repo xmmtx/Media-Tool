@@ -183,23 +183,24 @@ class Processor:
 
     def _process_movie(self, item, options, forced_match=None, forced_group=None) -> QueueItem:
         needed = required_fields(options.format)
+        is_library = options.output_mode == "library"
         info = extract_from_filename(item.path)
         item.info = info
         logger.info("文件名解析: title=%s year=%s", info.title, info.year)
 
         group = forced_group
-        if "group" in needed and not group:
+        if ("group" in needed or is_library) and not group:
             group = self.resolve_subgroup(item.path, info.group)
             item.group = group
             if not group:
                 return self._to_manual(item, "subgroup not recognized")
 
-        if "resolution" in needed:
+        if "resolution" in needed or is_library:
             info.resolution = probe_resolution(item.path)
             logger.info("分辨率(ffprobe): %s", info.resolution)
 
         match = forced_match
-        if not match and {"title_orig", "title_user", "year"} & needed:
+        if not match and ({"title_orig", "title_user", "year"} & needed or is_library):
             if not info.title:
                 return self._to_manual(item, "cannot parse title from filename")
             matches = self.tmdb.search(info.title, year=info.year,
@@ -228,15 +229,16 @@ class Processor:
                     info.title, info.year, info.season, info.episode)
 
         # 手动匹配：直接用预填字段（集标题/季/集）走格式化，跳过 TMDB 搜索与分类
+        is_library = options.output_mode == "library"
         if forced_values is not None:
             values = dict(forced_values)
             logger.info("手动匹配预填值: %s", values)
-            if "group" in needed:
+            if "group" in needed or is_library:
                 group = forced_group or self.resolve_subgroup(item.path, info.group)
                 item.group = group
                 if group:
                     values["group"] = group
-            if "resolution" in needed:
+            if "resolution" in needed or is_library:
                 info.resolution = probe_resolution(item.path)
                 if info.resolution:
                     values["resolution"] = info.resolution
@@ -244,17 +246,18 @@ class Processor:
                 values["year"] = info.year
             return self._finalize(item, options, values)
 
-        if {"season", "episode"} & needed and (info.season is None or info.episode is None):
+        if ({"season", "episode"} & needed or is_library) \
+                and (info.season is None or info.episode is None):
             return self._to_manual(item, "cannot parse season/episode")
 
         group = forced_group
-        if "group" in needed and not group:
+        if ("group" in needed or is_library) and not group:
             group = self.resolve_subgroup(item.path, info.group)
             item.group = group
             if not group:
                 return self._to_manual(item, "subgroup not recognized")
 
-        if "resolution" in needed:
+        if "resolution" in needed or is_library:
             info.resolution = probe_resolution(item.path)
 
         # 媒体库模式下必须拿到 TMDB 匹配（用于番剧/电视剧/纪录片分类）
@@ -289,8 +292,8 @@ class Processor:
         if match and info.season is not None and info.episode is not None:
             values["season"] = info.season
             values["episode"] = info.episode
-            # 剧集标题（本地化）优先作为 title_user
-            if "title_user" in needed:
+            # 剧集标题（本地化）优先作为 title_user（媒体库模式必须取到）
+            if "title_user" in needed or is_library:
                 ep = self.tmdb.get_episode(match.tmdb_id, info.season, info.episode,
                                            options.language)
                 if ep and ep.episode_title_user:
@@ -301,6 +304,7 @@ class Processor:
 
     def _process_music(self, item, options) -> QueueItem:
         needed = required_fields(options.format)
+        is_library = options.output_mode == "library"
         tags = read_music_tags(item.path)
         title = (tags.get("title") or [""])[0].strip()
         artists = split_artists(tags.get("artist"),
@@ -311,10 +315,10 @@ class Processor:
             return self._to_manual(item, "missing title/artist in metadata tags")
 
         values: Dict[str, object] = {}
-        if "title" in needed:
+        if "title" in needed or is_library:
             values["title"] = title
-        if "artist" in needed:
-            values["artist"] = "、".join(artists)
+        if "artist" in needed or is_library:
+            values["artist"] = self._artist_join_sep().join(artists)
         if "album" in needed and tags.get("album"):
             values["album"] = tags["album"][0]
         if "year" in needed and tags.get("date"):
@@ -325,6 +329,11 @@ class Processor:
         # 文件操作后在目标上写回拆分后的多艺术家 + 可选封面（不污染源文件）
         post = lambda dst: self._apply_music_post(dst, artists, options)
         return self._finalize(item, options, values, post=post)
+
+    def _artist_join_sep(self) -> str:
+        """多艺术家拼接分隔符：取设置页"歌手分割符"配置的第一个字符。"""
+        sep = self.config.get("music.artist_separators", "") or "、"
+        return sep[0] if sep else "、"
 
     def _apply_music_post(self, dst: str, artists: List[str], options: ProcessingOptions) -> None:
         if not update_music_tags(dst, {"artist": artists}):
@@ -390,11 +399,18 @@ class Processor:
                   values: Dict[str, object],
                   post: Optional[Callable[[str], None]] = None) -> QueueItem:
         ext = os.path.splitext(item.path)[1]
-        new_base = evaluate(options.format, values)
-        if not new_base:
-            return self._to_manual(item, "format produced empty name")
-        item.new_name = sanitize_filename(new_base) + ext
-        dst = self._build_dst(item, options, values, ext)
+        if options.output_mode == "library":
+            # 媒体库模式：文件名用库模板（Jellyfin 官方格式 + 更多影片信息），
+            # 目录保持 Jellyfin 结构；表格显示相对路径（含目录层级）
+            rel = self._library_rel_path(item, values, ext)
+            item.new_name = rel
+            dst = self._build_dst(item, options, values, ext)
+        else:
+            new_base = evaluate(options.format, values)
+            if not new_base:
+                return self._to_manual(item, "format produced empty name")
+            item.new_name = sanitize_filename(new_base) + ext
+            dst = self._build_dst(item, options, values, ext)
         item.dst = dst
         logger.info("格式化: %s -> %s", os.path.basename(item.path), item.new_name)
         if options.dry_run:
@@ -441,13 +457,29 @@ class Processor:
             else os.path.dirname(os.path.abspath(item.path))
         return os.path.join(dst_dir, item.new_name)
 
+    # 媒体库模式文件名模板（Jellyfin 官方格式 + 更多影片信息）
+    _LIBRARY_FORMATS = {
+        "movie": "{title_orig} ({year}) -[{group} {resolution}]",
+        "tv": "{title_orig} S{season_2d}E{episode_2d} {title_user} - [{group} {resolution}]",
+        "music": "{artist} - {title}",
+    }
+
+    def _library_filename(self, item: QueueItem, values: Dict[str, object],
+                          ext: str) -> str:
+        """媒体库模式的文件名：按库模板生成并清洗。"""
+        fmt = self._LIBRARY_FORMATS.get(item.kind, "{title_orig}")
+        base = evaluate(fmt, values)
+        base = sanitize_filename(base) or "Unknown"
+        return base + ext
+
     def _library_rel_path(self, item: QueueItem, values: Dict[str, object],
                           ext: str) -> str:
         """按 Jellyfin 规范构建媒体库内的相对路径 + 文件名。
 
-        - 电影: ``Movies/T (2009)/T (2009).ext``（extras 进 ``/ExtrasType/``）
-        - 剧集: ``TV/S (2009)/Season 01/S S01E01.ext``
-        - 音乐: ``Music/Artist/Album/NN - Title.ext``
+        - 电影: ``Movies/T (2009)/<库模板文件名>``
+        - 剧集: ``TV/S (2009)/Season 01/<库模板文件名>``
+        - 音乐: ``Music/Artist/Album/<库模板文件名>``
+        文件名由 :meth:`_library_filename` 按库模板生成（含更多影片信息）。
         """
         info = item.info
         extras = (info.extra or {}).get("extras") if info else None
@@ -456,25 +488,14 @@ class Processor:
         year = values.get("year") or (info.year if info else None)
         folder = f"{title} ({year})" if year else title
 
-        if item.kind == "movie":
-            name = f"{folder}{ext}"
-        elif item.kind == "tv":
+        name = self._library_filename(item, values, ext)
+        if item.kind == "tv":
             season = int(values.get("season") or (info.season if info else 1))
-            episode = int(values.get("episode") or (info.episode if info else 1))
             folder = os.path.join(folder, f"Season {season:02d}")
-            name = f"{title} S{season:02d}E{episode:02d}{ext}"
-        else:  # music
+        elif item.kind == "music":
             artist = sanitize_filename(str(values.get("artist") or "Unknown Artist"))
             album = sanitize_filename(str(values.get("album") or "Unknown Album"))
             folder = os.path.join(artist, album)
-            prefix = ""
-            track = values.get("track")
-            if track:
-                try:
-                    prefix = f"{int(str(track).split('/')[0]):02d} - "
-                except (TypeError, ValueError):
-                    prefix = ""
-            name = f"{prefix}{sanitize_filename(str(values.get('title') or 'Unknown'))}{ext}"
 
         if extras:
             folder = os.path.join(folder, extras)

@@ -100,5 +100,17 @@
   "col_season": "季编号",
   "col_episode": "集编号",
   "col_episode_title": "集标题",
-  "manual_matched": "已匹配 {count} 集"
+  "manual_matched": "已匹配 {count} 集",
+  "st_pending": "待处理",
+  "st_ok": "成功",
+  "st_manual": "手动干预",
+  "st_error": "错误",
+  "reason_subgroup": "字幕组未识别",
+  "reason_parse_se_ep": "无法解析季/集",
+  "reason_parse_title": "无法从文件名解析标题",
+  "reason_no_movie": "无 TMDB 电影匹配",
+  "reason_no_tv": "无 TMDB 剧集匹配",
+  "reason_tv_type": "无法判定剧集类型（番剧/电视剧/纪录片）",
+  "reason_missing_tags": "元数据缺少标题/艺术家",
+  "reason_empty_name": "格式生成空文件名"
 }
