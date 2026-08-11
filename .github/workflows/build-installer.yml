@@ -79,28 +79,41 @@ jobs:
           }
           Write-Host "All bundled resources present"
 
-      # windows-latest ships ffmpeg; copy ffprobe next to the exe so the
-      # resolution probe works out of the box (probe_resolution falls back
-      # to the exe dir when ffprobe is not on PATH).
+      # windows-latest no longer ships ffmpeg by default; install it via
+      # chocolatey, then copy ffprobe next to the exe so the resolution
+      # probe works out of the box (probe_resolution falls back to the
+      # exe dir when ffprobe is not on PATH).
+      - name: Install ffmpeg (ffprobe)
+        run: choco install ffmpeg --no-progress -y
+
       - name: Bundle ffprobe (resolution probe)
         shell: pwsh
         run: |
+          $src = $null
           $ff = Get-Command ffprobe -ErrorAction SilentlyContinue
-          if ($ff) {
-            Copy-Item $ff.Source -Destination "dist\MediaTool\ffprobe.exe" -Force
-            Write-Host "ffprobe bundled from $($ff.Source)"
+          if ($ff) { $src = $ff.Source }
+          elseif (Test-Path "C:\ProgramData\chocolatey\bin\ffprobe.exe") {
+            $src = "C:\ProgramData\chocolatey\bin\ffprobe.exe"
+          }
+          if ($src) {
+            Copy-Item $src -Destination "dist\MediaTool\ffprobe.exe" -Force
+            Write-Host "ffprobe bundled from $src"
           } else {
-            Write-Host "::warning::ffprobe not found on runner - resolution probing disabled"
+            Write-Host "::warning::ffprobe not found - resolution probing disabled"
           }
 
+      # 版本：tag push 时 GITHUB_REF_NAME = "v1.2.3" → "1.2.3";
+      # 普通 push 无版本 tag → 用 0.0.<run_number> 保证 Inno 拿到合法 X.Y.Z。
+      # 不调用 git describe（无 tag 时退出码非零会把步骤标红失败）。
       - name: Resolve version
         id: version
         shell: pwsh
         run: |
-          $tag = git describe --tags --abbrev=0 2>$null
-          $v = if ($tag) { $tag -replace '^v','' } else { "0.0.$env:GITHUB_RUN_NUMBER" }
+          $ref = "$env:GITHUB_REF_NAME"
+          $v = if ($ref -match '^v\d+\.\d+\.\d+') { $ref.Substring(1) } else { "0.0.$env:GITHUB_RUN_NUMBER" }
           "MEDIA_TOOL_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Resolved version: $v"
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
