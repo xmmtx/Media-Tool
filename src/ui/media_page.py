@@ -67,6 +67,8 @@ _REASON_KEYS = {
     "cannot determine TV type (anime/drama/documentary)": "reason_tv_type",
     "missing title/artist in metadata tags": "reason_missing_tags",
     "format produced empty name": "reason_empty_name",
+    "cannot parse season/episode from subtitle": "reason_parse_subtitle",
+    "no matching video for subtitle": "reason_no_video",
 }
 
 
@@ -106,8 +108,11 @@ class ProcessingThread(QThread):
                 self.item_done.emit(result)
                 self.progress.emit(int((i + 1) / total * 100) if total else 100)
         else:
-            total = len(self.files)
-            for i, path in enumerate(self.files):
+            # 视频先处理（登记匹配结果），字幕后处理（跟随同集视频）
+            ordered = sorted(self.files,
+                             key=lambda p: self.processor.is_subtitle(p))
+            total = len(ordered)
+            for i, path in enumerate(ordered):
                 item = self.processor.process_file(path, self.options)
                 if item.status == "ok":
                     ok += 1
@@ -359,7 +364,7 @@ class MediaPage(QWidget):
         self.table.insertRow(row)
         self.table.setItem(row, 0, QTableWidgetItem(os.path.basename(path)))
         self.table.setItem(row, 1, QTableWidgetItem(""))
-        self.table.setItem(row, 2, QTableWidgetItem("pending"))
+        self.table.setItem(row, 2, QTableWidgetItem(self._t("st_pending")))
         self.table.item(row, 0).setData(Qt.ItemDataRole.UserRole, path)
         self.lbl_status.setText(self._t("status_ready", count=len(self._paths)))
         self._update_drop_hint()
@@ -532,6 +537,7 @@ class MediaPage(QWidget):
         logger.info("开始匹配 %d 个文件 (kind=%s)", len(paths), self.kind)
         self._phase = "match"
         self._pending = []
+        self.processor.reset_match_cache()  # 清空上一批视频匹配缓存
         options = self._options()
         options.dry_run = True
         self._set_busy(True)

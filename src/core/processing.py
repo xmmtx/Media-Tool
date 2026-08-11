@@ -23,6 +23,17 @@ from typing import Callable, Dict, List, Optional
 
 logger = logging.getLogger("core.processing")
 
+# 字幕文件扩展名（跟随视频自动改名/移动）
+SUBTITLE_EXTS = {".ass", ".srt", ".ssa", ".vtt"}
+
+# 字幕语言标签规范化：常见中文标签 → Jellyfin 式“简中/繁中”
+_SUBTITLE_LANG_NORM = {
+    "sc": "简中", "chs": "简中", "scjp": "简中", "简体": "简中",
+    "简中": "简中", "zh-hans": "简中", "zh_cn": "简中",
+    "tc": "繁中", "cht": "繁中", "tcjp": "繁中", "繁體": "繁中",
+    "繁中": "繁中", "zh-hant": "繁中", "zh_tw": "繁中", "big5": "繁中",
+}
+
 try:
     from ..db import ConfigStore, ManualQueueStore, SubgroupStore  # src 作为顶层包运行时
 except ImportError:  # src 作为 sys.path 根运行时
@@ -140,6 +151,22 @@ class Processor:
         self.llm = LlmSubgroupProvider(self.config)
         self.manual_store = manual_store if manual_store is not None else ManualQueueStore()
         self.manual_queue: List[QueueItem] = []
+        self._video_by_ep: Dict[tuple, QueueItem] = {}  # (season, episode) -> 已匹配视频
+
+    @staticmethod
+    def is_subtitle(path: str) -> bool:
+        """是否字幕文件（扩展名判断）。"""
+        return os.path.splitext(path)[1].lower() in SUBTITLE_EXTS
+
+    def reset_match_cache(self) -> None:
+        """清空本批次视频匹配缓存（开始新一批匹配前调用）。"""
+        self._video_by_ep.clear()
+
+    def _record_video(self, item: QueueItem) -> None:
+        """视频匹配成功后登记 (season, episode) → item，供字幕跟随。"""
+        if item.status == "ok" and item.info \
+                and item.info.season is not None and item.info.episode is not None:
+            self._video_by_ep[(item.info.season, item.info.episode)] = item
 
     # ── 对外入口 ──────────────────────────────────────────────────────────
 
@@ -161,11 +188,17 @@ class Processor:
         item.format = options.format
         logger.info("处理文件: %s (kind=%s, mode=%s)", path, options.kind, options.mode)
         try:
+            if self.is_subtitle(path):
+                return self._process_subtitle(item, options)
             if options.kind == "movie":
-                return self._process_movie(item, options, forced_match, forced_group)
+                result = self._process_movie(item, options, forced_match, forced_group)
+                self._record_video(result)
+                return result
             if options.kind == "tv":
-                return self._process_tv(item, options, forced_match, forced_group,
-                                        forced_values)
+                result = self._process_tv(item, options, forced_match, forced_group,
+                                          forced_values)
+                self._record_video(result)
+                return result
             if options.kind == "music":
                 return self._process_music(item, options)
         except Exception as e:  # 运行期错误不中断整个批次
@@ -346,6 +379,60 @@ class Processor:
         """多艺术家拼接分隔符：取设置页"歌手分割符"配置的第一个字符。"""
         sep = self.config.get("music.artist_separators", "") or "、"
         return sep[0] if sep else "、"
+
+    # ── 字幕跟随视频 ─────────────────────────────────────────────────────
+
+    def _process_subtitle(self, item, options) -> QueueItem:
+        """字幕文件：按 (季, 集) 配对到同集视频，改名/移动跟随视频。
+
+        目标名 = 视频目标名（去掉扩展名）+ 语言标签 + 字幕扩展名，例如
+        ``... S01E10 xxx - [DBD 1920x1080].简中.ass``。
+        """
+        info = extract_from_filename(item.path)
+        item.info = info
+        logger.info("字幕解析: title=%s season=%s episode=%s",
+                    info.title, info.season, info.episode)
+        if info.season is None or info.episode is None:
+            return self._to_manual(item, "cannot parse season/episode from subtitle")
+        video = self._video_by_ep.get((info.season, info.episode))
+        if video is None or not video.dst:
+            return self._to_manual(item, "no matching video for subtitle")
+        ext = os.path.splitext(item.path)[1]
+        tag = self._subtitle_lang_tag(item.path, video.path)
+        base = os.path.splitext(video.dst)[0]
+        dst = f"{base}.{tag}{ext}"
+        item.dst = dst
+        item.new_name = os.path.basename(dst)
+        logger.info("字幕跟随视频: %s -> %s", os.path.basename(item.path),
+                    os.path.basename(dst))
+        if options.dry_run:
+            item.status = "ok"
+            return item
+        result = self._apply_op(item.path, dst, options.mode)
+        if not result.ok:
+            item.status = "error"
+            item.error = result.error or "file operation failed"
+            logger.error("字幕操作失败 %s -> %s: %s", item.path, dst, item.error)
+            return item
+        item.status = "ok"
+        return item
+
+    @staticmethod
+    def _subtitle_lang_tag(sub_path: str, video_path: str) -> str:
+        """从字幕文件名提取语言标签（相对视频名的尾部增量）并规范化。
+
+        如 ``xxx.scjp.ass`` 相对视频 ``xxx.mkv`` 提取 ``scjp`` → 规范化为 ``简中``；
+        无差异（同名字幕）时返回 ``sub``。
+        """
+        sub_stem = os.path.splitext(os.path.basename(sub_path))[0]
+        video_stem = os.path.splitext(os.path.basename(video_path))[0]
+        n = 0
+        while n < min(len(sub_stem), len(video_stem)) and sub_stem[n] == video_stem[n]:
+            n += 1
+        tag = sub_stem[n:].lstrip(". -_")
+        if not tag:
+            return "sub"
+        return _SUBTITLE_LANG_NORM.get(tag.lower(), tag)
 
     def _apply_music_post(self, dst: str, artists: List[str], options: ProcessingOptions) -> None:
         if not update_music_tags(dst, {"artist": artists}):

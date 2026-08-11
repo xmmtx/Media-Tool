@@ -115,5 +115,7 @@
   "reason_no_tv": "無 TMDB 劇集相符",
   "reason_tv_type": "無法判定劇集類型（番劇/電視劇/紀錄片）",
   "reason_missing_tags": "中繼資料缺少標題/藝術家",
-  "reason_empty_name": "格式產生空檔名"
+  "reason_empty_name": "格式產生空檔名",
+  "reason_parse_subtitle": "無法從字幕解析季/集",
+  "reason_no_video": "無相符的影片"
 }

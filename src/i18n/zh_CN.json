@@ -115,5 +115,7 @@
   "reason_no_tv": "无 TMDB 剧集匹配",
   "reason_tv_type": "无法判定剧集类型（番剧/电视剧/纪录片）",
   "reason_missing_tags": "元数据缺少标题/艺术家",
-  "reason_empty_name": "格式生成空文件名"
+  "reason_empty_name": "格式生成空文件名",
+  "reason_parse_subtitle": "无法从字幕解析季/集",
+  "reason_no_video": "无匹配的视频"
 }

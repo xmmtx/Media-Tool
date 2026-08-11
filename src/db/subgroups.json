@@ -7,46 +7,36 @@
     },
     "VCB-Studio": {
       "rename_to": "VCB",
-      "aliases": [
-        "VCB-Studio"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "7³ACG": {
       "rename_to": "7³ACG",
       "aliases": [
-        "7³ACG",
         "7_3_ACG"
       ],
       "added": "2026-08-10"
     },
     "GM-Team": {
       "rename_to": "GM",
-      "aliases": [
-        "GM-Team",
-        "GMTeam"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "ANi": {
       "rename_to": "ANi",
       "aliases": [
-        "ANi",
         "ANiTorrent"
       ],
       "added": "2026-08-10"
     },
     "LoliHouse": {
       "rename_to": "LoliHouse",
-      "aliases": [
-        "LoliHouse"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "桜都字幕组": {
       "rename_to": "桜都",
       "aliases": [
-        "桜都字幕组",
         "樱都字幕组"
       ],
       "added": "2026-08-10"
@@ -54,32 +44,27 @@
     "北宇治字幕组": {
       "rename_to": "北宇治",
       "aliases": [
-        "北宇治字幕组",
         "Kitauji"
       ],
       "added": "2026-08-10"
     },
     "天月動漫&發佈組": {
-      "rename_to": "天月動漫",
+      "rename_to": "天月",
       "aliases": [
-        "天月動漫&發佈組",
         "Skymoon-Raws"
       ],
       "added": "2026-08-10"
     },
     "喵萌奶茶屋": {
-      "rename_to": "喵萌奶茶屋",
+      "rename_to": "喵萌",
       "aliases": [
-        "喵萌奶茶屋",
-        "NekomoeKissaten",
-        "nekomoekissaten"
+        "NekomoeKissaten"
       ],
       "added": "2026-08-10"
     },
     "驯兽师联盟": {
-      "rename_to": "驯兽师联盟",
+      "rename_to": "驯兽师",
       "aliases": [
-        "驯兽师联盟",
         "馴獸師聯盟",
         "Hanada"
       ],
@@ -87,15 +72,12 @@
     },
     "三明治摆烂组": {
       "rename_to": "三明治摆烂",
-      "aliases": [
-        "三明治摆烂组"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "TSDM字幕组": {
       "rename_to": "TSDM",
       "aliases": [
-        "TSDM字幕组",
         "TSDM字幕組",
         "天使动漫"
       ],
@@ -104,7 +86,6 @@
     "极影字幕社": {
       "rename_to": "极影",
       "aliases": [
-        "极影字幕社",
         "极影字幕·毁片党"
       ],
       "added": "2026-08-10"
@@ -112,7 +93,6 @@
     "猎户发布组": {
       "rename_to": "猎户",
       "aliases": [
-        "猎户发布组",
         "猎户压制部"
       ],
       "added": "2026-08-10"
@@ -120,7 +100,6 @@
     "爱恋字幕社": {
       "rename_to": "爱恋",
       "aliases": [
-        "爱恋字幕社",
         "爱恋&猫恋汉化组",
         "KissSub"
       ],
@@ -128,15 +107,12 @@
     },
     "猫恋汉化组": {
       "rename_to": "猫恋",
-      "aliases": [
-        "猫恋汉化组"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "追放字幕组": {
       "rename_to": "追放",
       "aliases": [
-        "追放字幕组",
         "ExileSub"
       ],
       "added": "2026-08-10"
@@ -144,7 +120,6 @@
     "雪飄工作室": {
       "rename_to": "雪飄",
       "aliases": [
-        "雪飄工作室",
         "雪飘工作室",
         "FLsnow"
       ],
@@ -153,75 +128,63 @@
     "绿茶字幕组": {
       "rename_to": "绿茶",
       "aliases": [
-        "绿茶字幕组",
         "綠茶字幕組"
       ],
       "added": "2026-08-10"
     },
     "Prejudice-Studio": {
       "rename_to": "Prejudice",
-      "aliases": [
-        "Prejudice-Studio"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "咪路fans制作组": {
       "rename_to": "咪路fans",
-      "aliases": [
-        "咪路fans制作组"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "Zzz睡不醒": {
       "rename_to": "Zzz睡不醒",
-      "aliases": [
-        "Zzz睡不醒"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "魔星字幕团": {
       "rename_to": "魔星",
       "aliases": [
-        "魔星字幕团",
         "MagicStar"
       ],
       "added": "2026-08-10"
     },
     "银色子弹字幕组": {
       "rename_to": "银色子弹",
-      "aliases": [
-        "银色子弹字幕组"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "豌豆字幕组": {
       "rename_to": "豌豆",
-      "aliases": [
-        "豌豆字幕组"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "风之圣殿字幕组": {
       "rename_to": "风之圣殿",
-      "aliases": [
-        "风之圣殿字幕组"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "ReinForce": {
       "rename_to": "ReinForce",
-      "aliases": [
-        "ReinForce"
-      ],
+      "aliases": [],
       "added": "2026-08-10"
     },
     "百冬练习组": {
       "rename_to": "百冬",
       "aliases": [
-        "百冬練習組",
-        "百冬练习组"
+        "百冬練習組"
       ],
       "added": "2026-08-11"
+    },
+    "DBD-Raws": {
+      "rename_to": "DBD",
+      "aliases": [],
+      "added": "2026-08-12"
     }
   }
 }
