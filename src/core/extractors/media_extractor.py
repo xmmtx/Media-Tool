@@ -43,7 +43,7 @@ _GROUP_RE = re.compile(r"[-\[(]\s*([^-\]()]+?)\s*[\]\s)]*$")
 _EXTRAS_PATTERNS = [
     (r"trailers?|teasers?|\bcm\b|\bpv\b|web[\s\-_]*preview|web[\s\-_]*预告|预告", "trailers"),
     (r"behind\s+the\s+scenes|making\s+of|location\s+scouting|staff[\s\-_]*voice|"
-     r"cast[\s\-_]*voice|disc[\s\-_]*menu|\bmenu\b|制作特辑|幕后|花絮", "behind the scenes"),
+     r"cast[\s\-_]*voice|disc[\s\-_]*\d*[\s\-_]*menu|\bmenu\b|制作特辑|幕后|花絮", "behind the scenes"),
     (r"featurettes?|mini[\s\-_]*(?:drama|theater)|bd[\s\-_]*bonus|\bbonus\b|画集", "featurettes"),
     (r"shorts?|petit|spinoff|迷你|小剧场|短篇", "shorts"),
     (r"deleted\s+scen(?:e|es)|uncut|未放送|删减片段", "deleted scenes"),
@@ -56,10 +56,16 @@ _EXTRAS_PATTERNS = [
 
 
 def _detect_extras(info: "MediaInfo", name: str) -> None:
-    """在文件名中识别 extras 类型并写入 ``info.extra["extras"]``。"""
+    """在文件名中识别 extras 类型并写入 ``info.extra["extras"]``。
+
+    同时把命中的“视频名片段”（如 ``PV`` / ``Making of`` / ``NCOP``）记录到
+    ``info.extra["extras_frag"]``，供特典整理重命名使用。
+    """
     for _pat, label in _EXTRAS_PATTERNS:
-        if re.search(_pat, name, re.I):
+        m = re.search(_pat, name, re.I)
+        if m:
             info.extra["extras"] = label
+            info.extra["extras_frag"] = m.group().strip()
             return
 
 
@@ -290,6 +296,7 @@ def _regex_parse(name: str, fullname: str) -> MediaInfo:
         m = re.search(_pat, base, re.I)
         if m:
             info.extra["extras"] = label
+            info.extra["extras_frag"] = m.group().strip()
             used.append(m.group())
             break
 

@@ -63,6 +63,41 @@ from .providers import LlmSubgroupProvider, MediaMatch, TMDBProvider
 # Windows 非法文件名字符（含控制符）
 _INVALID_WIN = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
+# 特典“视频名片段”规范化：已知缩写保持大写，其余单词标题化
+_EXTRAS_ACRONYMS = {"PV", "CM", "NCOP", "NCED", "OP", "ED", "SP", "BD", "BTS"}
+_EXTRAS_SMALL_WORDS = {"of", "the", "and", "a", "an", "in", "on", "to",
+                       "for", "at", "by", "with", "vs"}
+
+# 特典文件名中的“视频详情”片段（分辨率/来源/编码），命名清洗时剔除
+_EXTRAS_DETAIL_RE = re.compile(
+    r"(?i)\b\d{3,4}x\d{3,4}\b|\b\d{3,4}p\b|"
+    r"\b(web[-.]?dl|bluray|bdrip|hdrip|hdtv|dvdrip|remux|webrip)\b|"
+    r"\b(h\.?264|h\.?265|hevc|avc|av1)\b"
+)
+
+
+def _norm_extras_fragment(frag: str) -> str:
+    """规范化特典“视频名片段”：缩写保持大写，其余标题化，去分隔符噪音。
+
+    如 ``making of`` → ``Making of``、``pv`` → ``PV``、``ncop`` → ``NCOP``。
+    """
+    frag = re.sub(r"[\[\](){}_.\-]", " ", frag)
+    frag = re.sub(r"\s+", " ", frag).strip(" -")
+    if not frag:
+        return ""
+    if frag.upper() in _EXTRAS_ACRONYMS:
+        return frag.upper()
+    words = []
+    for i, w in enumerate(frag.split(" ")):
+        if not w:
+            continue
+        low = w.lower()
+        if i > 0 and low in _EXTRAS_SMALL_WORDS:
+            words.append(low)
+        else:
+            words.append(w[:1].upper() + w[1:])
+    return " ".join(words)
+
 
 def sanitize_filename(name: str) -> str:
     """把生成的文件名清理为各平台安全形式（非法字符→下划线，去首尾点/空格）。"""
@@ -152,6 +187,7 @@ class Processor:
         self.manual_store = manual_store if manual_store is not None else ManualQueueStore()
         self.manual_queue: List[QueueItem] = []
         self._video_by_ep: Dict[tuple, QueueItem] = {}  # (season, episode) -> 已匹配视频
+        self._extras_seq: Dict[tuple, int] = {}  # (目标目录, 视频名片段) -> 已分配序号
 
     @staticmethod
     def is_subtitle(path: str) -> bool:
@@ -161,6 +197,7 @@ class Processor:
     def reset_match_cache(self) -> None:
         """清空本批次视频匹配缓存（开始新一批匹配前调用）。"""
         self._video_by_ep.clear()
+        self._extras_seq.clear()
 
     def _record_video(self, item: QueueItem) -> None:
         """视频匹配成功后登记 (season, episode) → item，供字幕跟随。"""
@@ -453,11 +490,65 @@ class Processor:
         logger.info("TMDB 搜索(特典) %s: 0 个候选", info.title)
         return None
 
+    def _extras_fragment(self, info: MediaInfo) -> str:
+        """特典“视频名片段”：删除作品名/视频详情/组名后只留视频名。
+
+        用户规范：识别为非正片且无法细分时，先清理文件名（删除作品名、
+        视频详情、组名，只留视频名）再放入 extras。例如
+        ``[DBD] Overman King Gainer - NCOP.mkv`` → ``NCOP``。
+
+        优先级：清理后的完整视频名（若包含解析捕获的片段且更完整，如
+        “特典映像”）→ 解析捕获的 extras 标记（PV / Making of / NCOP…）
+        → 兜底 ``Extra``。
+        """
+        base = os.path.splitext(os.path.basename(info.filename or ""))[0]
+        frag = str((info.extra or {}).get("extras_frag") or "").strip()
+        title = (info.title or "").strip()
+        if title and len(title) >= 2 and title in base:
+            base = base.replace(title, "")
+        base = re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", base)  # 组名/括号块
+        base = _EXTRAS_DETAIL_RE.sub(" ", base)              # 分辨率/来源/编码
+        base = re.sub(r"[\[\](){}_.\-]", " ", base)
+        base = re.sub(r"\s+", " ", base).strip(" -")
+        base = re.sub(r"\s+\d{1,4}$", "", base).strip()    # 尾部序号
+        cleaned = _norm_extras_fragment(base)
+        # 清理结果需“含片段且不以数字开头”才算有效（否则退回片段本身）
+        if frag and cleaned and frag.upper() in cleaned.upper() \
+                and not re.match(r"^\d", cleaned):
+            return cleaned
+        if frag:
+            return _norm_extras_fragment(frag)
+        return cleaned or "Extra"
+
+    def _next_extras_number(self, folder: str, fragment: str) -> int:
+        """在目标 extras 目录中为同一“视频名片段”计算下一个序号（01、02…）。
+
+        优先取目录中已有同名文件的末尾序号，其次本批已分配序号（dry-run
+        阶段文件尚未落盘，需内存补账）。
+        """
+        prefix = re.escape(fragment)
+        pat = re.compile(rf"^{prefix}\s*(\d+)", re.I)
+        max_n = 0
+        try:
+            for name in os.listdir(folder):
+                m = pat.match(name)
+                if m:
+                    max_n = max(max_n, int(m.group(1)))
+        except OSError:
+            pass
+        key = (os.path.normcase(folder), fragment.lower())
+        max_n = max(max_n, self._extras_seq.get(key, 0))
+        n = max_n + 1
+        self._extras_seq[key] = n
+        return n
+
     def _process_extras(self, item, options) -> QueueItem:
         """特典文件（NCOP/NCED/PV/menu/Tokuten 等）：整理到媒体库 extras 子目录。
 
         - 不当作正片集：不参与季/集解析、不进字幕配对缓存。
-        - library 模式落到 ``<root>/<Show> (year)/<extras>/``（按剧集类型选根）。
+        - library 模式落到 ``<root>/<Show> (year)/<extras>/``（按剧集类型选根），
+          文件名按用户规范重命名：删除作品名/视频详情/组名，只留视频名片段 +
+          序号，如 ``NCOP 01.mkv`` / ``Making of 01.mkv``（同一片段自动递增）。
         - custom 模式落到输出目录（或源目录），文件名保留。
         """
         info = item.info
@@ -476,9 +567,12 @@ class Processor:
                 title = sanitize_filename(match.title_orig)
                 year = match.year
                 folder = f"{title} ({year})" if year else title
-                dst = os.path.join(root, folder, extras_type,
-                                   os.path.basename(item.path))
-        if dst is None:  # custom 模式或无对应根目录：落到输出目录/源目录
+                folder_path = os.path.join(root, folder, extras_type)
+                ext = os.path.splitext(item.path)[1]
+                frag = self._extras_fragment(info)
+                new_name = f"{frag} {self._next_extras_number(folder_path, frag):02d}{ext}"
+                dst = os.path.join(folder_path, new_name)
+        if dst is None:  # custom 模式或无对应根目录：落到输出目录/源目录，保留原文件名
             base = options.output_dir or os.path.dirname(os.path.abspath(item.path))
             dst = os.path.join(base, os.path.basename(item.path))
         item.dst = dst
