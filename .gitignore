@@ -6,6 +6,10 @@ __pycache__/
 *.pyo
 *.pyd
 *.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
 
 # ========================
 # PyInstaller

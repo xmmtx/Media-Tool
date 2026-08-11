@@ -31,11 +31,12 @@ ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#MyAppExeName}
 SetupLogging=yes
 
-; 界面语言：默认英文 + 简体中文。
-; 如需繁体，追加：Name: "chinesetraditional"; MessagesFile: "compiler:Languages\ChineseTradtional.isl"
+; 界面语言：默认英文 + 简体中文（语言文件随仓库分发 packaging/Languages/，
+; 官方安装包不带中文翻译）。如需繁体，把 ChineseTradtional.isl 放入
+; packaging/Languages/ 后在此追加一行即可。
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+Name: "chinesesimplified"; MessagesFile: "Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
