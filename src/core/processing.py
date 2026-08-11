@@ -68,9 +68,9 @@ _EXTRAS_ACRONYMS = {"PV", "CM", "NCOP", "NCED", "OP", "ED", "SP", "BD", "BTS"}
 _EXTRAS_SMALL_WORDS = {"of", "the", "and", "a", "an", "in", "on", "to",
                        "for", "at", "by", "with", "vs"}
 
-# 特典文件名中的“视频详情”片段（分辨率/来源/编码），命名清洗时剔除
+# 特典文件名中的“视频详情”片段（分辨率/来源/编码/位深），命名清洗时剔除
 _EXTRAS_DETAIL_RE = re.compile(
-    r"(?i)\b\d{3,4}x\d{3,4}\b|\b\d{3,4}p\b|"
+    r"(?i)\b\d{3,4}x\d{3,4}\b|\b\d{3,4}p\b|\b\d{1,2}bit\b|"
     r"\b(web[-.]?dl|bluray|bdrip|hdrip|hdtv|dvdrip|remux|webrip)\b|"
     r"\b(h\.?264|h\.?265|hevc|avc|av1)\b"
 )
@@ -495,15 +495,11 @@ class Processor:
 
         用户规范：``Show - PV - 特报映像.mkv`` → ``PV 01 特报映像.mkv``
         （类型词 + 序号 + 名字，均以空格分隔）。用类型词作锚点：它之前是
-        作品名（父目录已有剧名，丢弃），它之后是“序号 + 名字”。若类型词
+        作品名（父目录已有剧名，丢弃）；序号取它之后紧邻的第一个数字（可能在
+        方括号内，如 ``[NCED10]`` → 10）；名字只取方括号外的描述文本。若类型词
         只是较长名字的子串（如 ``特典映像`` 里的 ``特典``）则合并为整体片段。
         """
         base = os.path.splitext(os.path.basename(info.filename or ""))[0]
-        # 只剥组名/括号块与视频详情；不动 title（anitopy 会把名字并入 title）
-        base = re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", base)
-        base = _EXTRAS_DETAIL_RE.sub(" ", base)
-        base = re.sub(r"\s+", " ", base).strip(" -")
-
         frag = _norm_extras_fragment(
             str((info.extra or {}).get("extras_frag") or ""))
         if not frag:
@@ -512,19 +508,22 @@ class Processor:
         if not m:
             return frag, None, None
         rest = base[m.end():]
-        # 类型词是较长名字的子串（紧贴无分隔符）→ 合并为整体片段
-        if rest and not re.match(r"^[\s\-–]", rest):
+        # 类型词是较长名字的子串：紧贴且非数字/括号/分隔符开头（如 特典映像）→ 合并整体
+        if rest and re.match(r"^[^\s\-–\[()\]\d]", rest):
             whole = _norm_extras_fragment(base[m.start():])
             return whole, None, None
-        rest = rest.strip(" -")
-        seq, name = None, ""
-        m2 = re.match(r"^(\d{1,4})\s*(?:[-–]\s*)?(.*)$", rest)
-        if m2:
-            seq = int(m2.group(1))
-            name = m2.group(2).strip(" -")
-        elif rest:
-            name = rest
-        return frag, seq, (name or None)
+        # 序号：类型词后紧邻的第一个数字（可能在方括号内）
+        seq_rest = re.sub(r"^[\s\-–\[\]\(\)]+", "", rest)
+        seq_rest = _EXTRAS_DETAIL_RE.sub(" ", seq_rest)
+        m_seq = re.match(r"(\d{1,4})", seq_rest)
+        seq = int(m_seq.group(1)) if m_seq else None
+        # 名字：仅方括号外文本（剥详情/分隔/前导序号）
+        outer = re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", rest)
+        outer = _EXTRAS_DETAIL_RE.sub(" ", outer)
+        outer = re.sub(r"^[\s\-–\d]+", "", outer)
+        outer = re.sub(r"[\[\](){}_.\-]", " ", outer)
+        outer = re.sub(r"\s+", " ", outer).strip(" -")
+        return frag, seq, (outer or None)
 
     def _next_extras_number(self, folder: str, fragment: str) -> int:
         """在目标 extras 目录中为同一“视频名片段”计算下一个序号（01、02…）。
