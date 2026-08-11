@@ -1,8 +1,7 @@
 # Build the Windows installer for MediaTool.
 #
 # Triggers:
-#   - every push (any branch)  -> builds installer + uploads artifacts
-#   - pushing a tag like v1.2.3 -> also publishes a GitHub release
+#   - pushing a tag like v1.2.3 -> builds installer + publishes a GitHub release
 #   - manual workflow_dispatch  -> builds + uploads artifacts (no release)
 #
 # Jobs:
@@ -21,7 +20,6 @@ name: Build Windows Installer
 
 on:
   push:
-    branches: ['**']
     tags: ['v*']
   workflow_dispatch:
 
