@@ -165,7 +165,8 @@ class Processor:
     def _record_video(self, item: QueueItem) -> None:
         """视频匹配成功后登记 (season, episode) → item，供字幕跟随。"""
         if item.status == "ok" and item.info \
-                and item.info.season is not None and item.info.episode is not None:
+                and item.info.season is not None and item.info.episode is not None \
+                and not (item.info.extra or {}).get("extras"):
             self._video_by_ep[(item.info.season, item.info.episode)] = item
 
     # ── 对外入口 ──────────────────────────────────────────────────────────
@@ -270,6 +271,9 @@ class Processor:
         item.info = info
         logger.info("文件名解析: title=%s year=%s season=%s episode=%s",
                     info.title, info.year, info.season, info.episode)
+        # 特典文件（NCOP/NCED/PV/menu/Tokuten 等）：识别为 extras，不当作正片集
+        if (info.extra or {}).get("extras"):
+            return self._process_extras(item, options)
 
         # 手动匹配：直接用预填字段（集标题/季/集）走格式化，跳过 TMDB 搜索与分类
         is_library = options.output_mode == "library"
@@ -433,6 +437,64 @@ class Processor:
         if not tag:
             return "sub"
         return _SUBTITLE_LANG_NORM.get(tag.lower(), tag)
+
+    # ── 特典整理（extras） ───────────────────────────────────────────────
+
+    def _tmdb_tv_match(self, info: MediaInfo, options) -> Optional[MediaMatch]:
+        """按解析标题搜 TMDB 剧集并选中（复用 tv pipeline 的匹配逻辑）。"""
+        if not info or not info.title:
+            return None
+        matches = self.tmdb.search(info.title, year=info.year,
+                                   media_type="tv",
+                                   language=tmdb_lang(options.language))
+        if matches:
+            logger.info("TMDB 搜索(特典) %s: %d 个候选", info.title, len(matches))
+            return self._pick_match(matches, info.year)
+        logger.info("TMDB 搜索(特典) %s: 0 个候选", info.title)
+        return None
+
+    def _process_extras(self, item, options) -> QueueItem:
+        """特典文件（NCOP/NCED/PV/menu/Tokuten 等）：整理到媒体库 extras 子目录。
+
+        - 不当作正片集：不参与季/集解析、不进字幕配对缓存。
+        - library 模式落到 ``<root>/<Show> (year)/<extras>/``（按剧集类型选根）。
+        - custom 模式落到输出目录（或源目录），文件名保留。
+        """
+        info = item.info
+        extras_type = str((info.extra or {}).get("extras") or "Other")
+        logger.info("特典识别: %s (%s)", info.title, extras_type)
+        match = self._tmdb_tv_match(info, options)
+        if match is None:
+            return self._to_manual(item, "no TMDB TV match")
+        item.match = match
+
+        dst = None
+        if options.output_mode == "library" and options.library_roots:
+            tv_type = classify_tv_type(match.genres)
+            root = options.library_roots.get(f"tv_{tv_type}") if tv_type else None
+            if root:
+                title = sanitize_filename(match.title_orig)
+                year = match.year
+                folder = f"{title} ({year})" if year else title
+                dst = os.path.join(root, folder, extras_type,
+                                   os.path.basename(item.path))
+        if dst is None:  # custom 模式或无对应根目录：落到输出目录/源目录
+            base = options.output_dir or os.path.dirname(os.path.abspath(item.path))
+            dst = os.path.join(base, os.path.basename(item.path))
+        item.dst = dst
+        item.new_name = os.path.basename(dst)
+        logger.info("特典整理: %s -> %s", os.path.basename(item.path), dst)
+        if options.dry_run:
+            item.status = "ok"
+            return item
+        result = self._apply_op(item.path, dst, options.mode)
+        if not result.ok:
+            item.status = "error"
+            item.error = result.error or "file operation failed"
+            logger.error("特典操作失败 %s -> %s: %s", item.path, dst, item.error)
+            return item
+        item.status = "ok"
+        return item
 
     def _apply_music_post(self, dst: str, artists: List[str], options: ProcessingOptions) -> None:
         if not update_music_tags(dst, {"artist": artists}):

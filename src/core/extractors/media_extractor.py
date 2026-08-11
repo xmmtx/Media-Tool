@@ -37,16 +37,26 @@ _CODEC_RE = re.compile(r"[hx]\.?26[45]|HEVC|AVC|AV1", re.I)
 _GROUP_RE = re.compile(r"[-\[(]\s*([^-\]()]+?)\s*[\]\s)]*$")
 
 # extras 类型识别：文件名中的标记 → Jellyfin 规范子目录名
+# （含番剧常见的 NCOP/NCED/PV/CM/menu/Tokuten/特典 等标记）
 _EXTRAS_PATTERNS = [
     (r"behind\s+the\s+scenes", "Behind the Scenes"),
-    (r"trailers?", "Trailers"),
+    (r"trailers?|\bpv\b|\bcm\b", "Trailers"),
     (r"theme[\s\-_]*(?:music|song)", "Theme Music"),
     (r"deleted\s+scenes", "Deleted Scenes"),
-    (r"featurettes?", "Featurettes"),
+    (r"featurettes?|tokuten|特典", "Featurettes"),
     (r"interviews?", "Interviews"),
     (r"samples?", "Samples"),
-    (r"shorts?", "Shorts"),
+    (r"shorts?|\bsp\b", "Shorts"),
+    (r"ncop|nced|\bop\b|\bed\b|menu", "Other"),
 ]
+
+
+def _detect_extras(info: "MediaInfo", name: str) -> None:
+    """在文件名中识别 extras 类型并写入 ``info.extra["extras"]``。"""
+    for _pat, label in _EXTRAS_PATTERNS:
+        if re.search(_pat, name, re.I):
+            info.extra["extras"] = label
+            return
 
 
 # 已知 extras 类型，供外部校验
@@ -301,10 +311,12 @@ def extract_from_filename(name: str) -> MediaInfo:
     base_name = os.path.basename(name)
     info = _anitopy_parse(base_name)
     if info and info.title:
+        _detect_extras(info, base_name)
         return info
     info = _regex_parse(base_name, base_name)
     if info.title:
         info.title_source = "regex"
+        _detect_extras(info, base_name)
         return info
     ptn = _load_ptn()
     if ptn is not None:
@@ -320,9 +332,11 @@ def extract_from_filename(name: str) -> MediaInfo:
                 info.group = str(parts["group"]).strip() if parts.get("group") else None
                 info.quality = str(parts["quality"]) if parts.get("quality") else None
                 info.codec = str(parts["codec"]) if parts.get("codec") else None
+                _detect_extras(info, base_name)
                 return info
         except Exception:
             pass  # PTN 解析失败时保留正则结果
+    _detect_extras(info, base_name)
     return info
 
 
