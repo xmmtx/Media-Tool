@@ -490,35 +490,41 @@ class Processor:
         logger.info("TMDB 搜索(特典) %s: 0 个候选", info.title)
         return None
 
-    def _extras_fragment(self, info: MediaInfo) -> str:
-        """特典“视频名片段”：删除作品名/视频详情/组名后只留视频名。
+    def _extras_parts(self, info: MediaInfo) -> tuple:
+        """特典命名三要素 ``(frag, seq, name)``：类型词 / 原序号(或 None) / 名字(或 None)。
 
-        用户规范：识别为非正片且无法细分时，先清理文件名（删除作品名、
-        视频详情、组名，只留视频名）再放入 extras。例如
-        ``[DBD] Overman King Gainer - NCOP.mkv`` → ``NCOP``。
-
-        优先级：清理后的完整视频名（若包含解析捕获的片段且更完整，如
-        “特典映像”）→ 解析捕获的 extras 标记（PV / Making of / NCOP…）
-        → 兜底 ``Extra``。
+        用户规范：``Show - PV - 特报映像.mkv`` → ``PV 01 特报映像.mkv``
+        （类型词 + 序号 + 名字，均以空格分隔）。用类型词作锚点：它之前是
+        作品名（父目录已有剧名，丢弃），它之后是“序号 + 名字”。若类型词
+        只是较长名字的子串（如 ``特典映像`` 里的 ``特典``）则合并为整体片段。
         """
         base = os.path.splitext(os.path.basename(info.filename or ""))[0]
-        frag = str((info.extra or {}).get("extras_frag") or "").strip()
-        title = (info.title or "").strip()
-        if title and len(title) >= 2 and title in base:
-            base = base.replace(title, "")
-        base = re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", base)  # 组名/括号块
-        base = _EXTRAS_DETAIL_RE.sub(" ", base)              # 分辨率/来源/编码
-        base = re.sub(r"[\[\](){}_.\-]", " ", base)
+        # 只剥组名/括号块与视频详情；不动 title（anitopy 会把名字并入 title）
+        base = re.sub(r"\[[^\]]*\]|\([^)]*\)", " ", base)
+        base = _EXTRAS_DETAIL_RE.sub(" ", base)
         base = re.sub(r"\s+", " ", base).strip(" -")
-        base = re.sub(r"\s+\d{1,4}$", "", base).strip()    # 尾部序号
-        cleaned = _norm_extras_fragment(base)
-        # 清理结果需“含片段且不以数字开头”才算有效（否则退回片段本身）
-        if frag and cleaned and frag.upper() in cleaned.upper() \
-                and not re.match(r"^\d", cleaned):
-            return cleaned
-        if frag:
-            return _norm_extras_fragment(frag)
-        return cleaned or "Extra"
+
+        frag = _norm_extras_fragment(
+            str((info.extra or {}).get("extras_frag") or ""))
+        if not frag:
+            frag = "Extra"
+        m = re.search(re.escape(frag), base, re.I)
+        if not m:
+            return frag, None, None
+        rest = base[m.end():]
+        # 类型词是较长名字的子串（紧贴无分隔符）→ 合并为整体片段
+        if rest and not re.match(r"^[\s\-–]", rest):
+            whole = _norm_extras_fragment(base[m.start():])
+            return whole, None, None
+        rest = rest.strip(" -")
+        seq, name = None, ""
+        m2 = re.match(r"^(\d{1,4})\s*(?:[-–]\s*)?(.*)$", rest)
+        if m2:
+            seq = int(m2.group(1))
+            name = m2.group(2).strip(" -")
+        elif rest:
+            name = rest
+        return frag, seq, (name or None)
 
     def _next_extras_number(self, folder: str, fragment: str) -> int:
         """在目标 extras 目录中为同一“视频名片段”计算下一个序号（01、02…）。
@@ -547,8 +553,8 @@ class Processor:
 
         - 不当作正片集：不参与季/集解析、不进字幕配对缓存。
         - library 模式落到 ``<root>/<Show> (year)/<extras>/``（按剧集类型选根），
-          文件名按用户规范重命名：删除作品名/视频详情/组名，只留视频名片段 +
-          序号，如 ``NCOP 01.mkv`` / ``Making of 01.mkv``（同一片段自动递增）。
+          文件名按用户规范重命名：类型词 + 序号 + 名字（如有），如
+          ``PV 01 特报映像.mkv`` / ``NCOP 01.mkv``（无名字退化为类型+序号）。
         - custom 模式落到输出目录（或源目录），文件名保留。
         """
         info = item.info
@@ -569,8 +575,12 @@ class Processor:
                 folder = f"{title} ({year})" if year else title
                 folder_path = os.path.join(root, folder, extras_type)
                 ext = os.path.splitext(item.path)[1]
-                frag = self._extras_fragment(info)
-                new_name = f"{frag} {self._next_extras_number(folder_path, frag):02d}{ext}"
+                frag, seq, name = self._extras_parts(info)
+                n = seq if seq else self._next_extras_number(folder_path, frag)
+                new_name = f"{frag} {n:02d}"
+                if name:
+                    new_name += f" {name}"
+                new_name += ext
                 dst = os.path.join(folder_path, new_name)
         if dst is None:  # custom 模式或无对应根目录：落到输出目录/源目录，保留原文件名
             base = options.output_dir or os.path.dirname(os.path.abspath(item.path))
