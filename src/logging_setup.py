@@ -43,7 +43,13 @@ def _archive_previous(now: datetime | None = None) -> None:
     archive = f"{date_str}-{n}"
     with zipfile.ZipFile(LOGS_DIR / f"{archive}.zip", "w", zipfile.ZIP_DEFLATED) as zf:
         zf.write(latest, arcname=f"{archive}.log")
-    latest.unlink(missing_ok=True)
+    try:
+        latest.unlink(missing_ok=True)
+    except OSError as e:
+        # Windows 下文件被其他程序（如编辑器）占用时无法删除：不阻塞启动，
+        # 保留原文件，本次日志追加到其后（下次启动再尝试归档）
+        logging.getLogger("logging_setup").warning(
+            "latest.log 无法删除（%s），本次日志将追加到原文件", e)
 
 
 def set_logging_enabled(enabled: bool, level: int = logging.INFO) -> None:

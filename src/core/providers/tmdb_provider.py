@@ -89,6 +89,19 @@ class TMDBProvider(BaseProvider):
 
     # ── 剧集信息 ──────────────────────────────────────────────────────────
 
+    def get_title(self, tmdb_id: int, media_type: str = "movie",
+                  language: str = "zh-CN") -> Optional[str]:
+        """获取某媒体在指定语言下的本地化标题（用于 ``{title_user}`` 优先级回退）。"""
+        if not self.available or not tmdb_id:
+            return None
+        path = f"/movie/{tmdb_id}" if media_type == "movie" else f"/tv/{tmdb_id}"
+        try:
+            data = self._request(path, {"language": language})
+        except (urllib.error.URLError, OSError, ValueError, KeyError):
+            return None
+        key = "title" if media_type == "movie" else "name"
+        return data.get(key) or None
+
     def get_episode(
         self,
         tv_id: int,

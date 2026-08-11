@@ -209,6 +209,15 @@ class SettingsPage(QWidget):
         self.logging_enable.checkedChanged.connect(self._mark_dirty)
         lay.addWidget(self.logging_enable)
 
+        # ── 简繁转换引擎 ─────────────────────────────────────────
+        self.lbl_convert_engine = StrongBodyLabel(self._t("settings_convert_engine"))
+        self.convert_engine_combo = ComboBox(self)
+        for code in ("opencc", "zhconv"):
+            self.convert_engine_combo.addItem(self._t("engine_" + code), userData=code)
+        self.convert_engine_combo.currentIndexChanged.connect(self._mark_dirty)
+        lay.addWidget(self.lbl_convert_engine)
+        lay.addWidget(self.convert_engine_combo)
+
         # ── 底部按钮行（右下角）：保存 + 取消 ──────────────────────
         btn_row = QHBoxLayout()
         btn_row.addStretch()
@@ -243,6 +252,7 @@ class SettingsPage(QWidget):
             self.root_labels[code].setText(self._t("output_root_" + code))
         self.lbl_artist_sep.setText(self._t("artist_separator_label"))
         self.logging_enable.setText(self._t("settings_logging_enable"))
+        self.lbl_convert_engine.setText(self._t("settings_convert_engine"))
         # 语言下拉：更新"跟随系统"文案并保持选中
         cur = self.lang_combo.currentData() or self.config.get("language", "zh_CN")
         self.lang_combo.blockSignals(True)
@@ -323,6 +333,7 @@ class SettingsPage(QWidget):
             "output.roots.music": (self.config.get("output.roots", {}) or {}).get("music", ""),
             "music.artist_separators": self.config.get("music.artist_separators", ""),
             "logging.enabled": bool(self.config.get("logging.enabled", True)),
+            "localize.engine": self.config.get("localize.engine", "opencc"),
         }
 
     def _current(self) -> Dict:
@@ -345,6 +356,7 @@ class SettingsPage(QWidget):
             "output.roots.music": self.root_edits["music"].text().strip(),
             "music.artist_separators": self.artist_sep_edit.text().strip(),
             "logging.enabled": self.logging_enable.isChecked(),
+            "localize.engine": self.convert_engine_combo.currentData() or "opencc",
         }
 
     def _mark_dirty(self, *_args) -> None:
@@ -408,6 +420,11 @@ class SettingsPage(QWidget):
         self.logging_enable.blockSignals(True)
         self.logging_enable.setChecked(bool(self.config.get("logging.enabled", True)))
         self.logging_enable.blockSignals(False)
+        ce = self.config.get("localize.engine", "opencc")
+        ce_idx = self._index_of_data(self.convert_engine_combo, ce)
+        self.convert_engine_combo.blockSignals(True)
+        self.convert_engine_combo.setCurrentIndex(ce_idx if ce_idx >= 0 else 0)
+        self.convert_engine_combo.blockSignals(False)
         self._update_roots_visibility()
 
     def _save(self) -> None:
@@ -440,6 +457,8 @@ class SettingsPage(QWidget):
         # 立即生效：动态启停文件日志写入
         from logging_setup import set_logging_enabled
         set_logging_enabled(self.logging_enable.isChecked())
+        self.config.set("localize.engine",
+                        self.convert_engine_combo.currentData() or "opencc")
 
         self._saved = self._snapshot()
         self.btn_save.setEnabled(False)

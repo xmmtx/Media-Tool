@@ -33,6 +33,7 @@ from qfluentwidgets import (
     TableWidget,
 )
 
+from core.localize import tmdb_lang
 from core.providers import BaseProvider, MediaMatch
 
 
@@ -45,6 +46,7 @@ class EpisodeMatchDialog(QDialog):
         super().__init__(parent)
         self.provider = provider
         self.language = language
+        self._tmdb_lang = tmdb_lang(language)  # i18n code → TMDB 语言代码
         self.i18n = i18n
         self.selected_show: Optional[MediaMatch] = None
         self.selected_episodes: List[dict] = []
@@ -135,7 +137,7 @@ class EpisodeMatchDialog(QDialog):
         if not query:
             return
         self._shows = self.provider.search(query, media_type="tv",
-                                           language=self.language)
+                                           language=self._tmdb_lang)
         self.show_list.clear()
         for m in self._shows:
             item = QListWidgetItem(self._show_label(m))
@@ -152,7 +154,7 @@ class EpisodeMatchDialog(QDialog):
     def _on_show_selected(self, item: QListWidgetItem) -> None:
         show: MediaMatch = item.data(Qt.ItemDataRole.UserRole)
         self.selected_show = show
-        episodes = self.provider.get_tv_seasons(show.tmdb_id, language=self.language)
+        episodes = self.provider.get_tv_seasons(show.tmdb_id, language=self._tmdb_lang)
         self.ep_table.setRowCount(0)
         for ep in episodes:
             row = self.ep_table.rowCount()

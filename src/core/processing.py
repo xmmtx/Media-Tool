@@ -34,6 +34,12 @@ from .extractors.media_extractor import (
 )
 from .file_ops import FileOperator, OperationResult
 from .formatters.expression_engine import evaluate, required_fields
+from .localize import (
+    convert_title,
+    looks_localized,
+    title_language_chain,
+    tmdb_lang,
+)
 from .metadata.music_tags import (
     copy_cover,
     inject_cover,
@@ -204,7 +210,8 @@ class Processor:
             if not info.title:
                 return self._to_manual(item, "cannot parse title from filename")
             matches = self.tmdb.search(info.title, year=info.year,
-                                       media_type="movie", language=options.language)
+                                       media_type="movie",
+                                       language=tmdb_lang(options.language))
             logger.info("TMDB 搜索 %s (year=%s): %d 个候选",
                         info.title, info.year, len(matches))
             match = self._pick_match(matches, info.year)
@@ -216,6 +223,9 @@ class Processor:
         item.match = match
 
         values = self._base_values(info, group, match)
+        if match and ("title_user" in needed or is_library):
+            values["title_user"] = self._resolve_title_user(
+                match, "movie", options.language)
         return self._finalize(item, options, values)
 
     # ── 剧集 pipeline ─────────────────────────────────────────────────────
@@ -268,7 +278,8 @@ class Processor:
             if not info.title:
                 return self._to_manual(item, "cannot parse title from filename")
             matches = self.tmdb.search(info.title, year=info.year,
-                                       media_type="tv", language=options.language)
+                                       media_type="tv",
+                                       language=tmdb_lang(options.language))
             logger.info("TMDB 搜索 %s (year=%s): %d 个候选",
                         info.title, info.year, len(matches))
             match = self._pick_match(matches, info.year)
@@ -292,12 +303,13 @@ class Processor:
         if match and info.season is not None and info.episode is not None:
             values["season"] = info.season
             values["episode"] = info.episode
-            # 剧集标题（本地化）优先作为 title_user（媒体库模式必须取到）
+            # 集标题（本地化）按 UI 语言优先级解析（媒体库模式必须取到）
             if "title_user" in needed or is_library:
-                ep = self.tmdb.get_episode(match.tmdb_id, info.season, info.episode,
-                                           options.language)
-                if ep and ep.episode_title_user:
-                    values["title_user"] = ep.episode_title_user
+                ep_user = self._resolve_title_user(
+                    match, "tv", options.language,
+                    episode_key=(info.season, info.episode))
+                if ep_user:
+                    values["title_user"] = ep_user
         return self._finalize(item, options, values)
 
     # ── 音乐 pipeline ─────────────────────────────────────────────────────
@@ -394,6 +406,28 @@ class Processor:
                 if m.year == year:
                     return m
         return matches[0]
+
+    def _resolve_title_user(self, match: MediaMatch, media_type: str,
+                            ui_lang: str,
+                            episode_key: Optional[tuple] = None) -> str:
+        """按 UI 语言优先级链解析 ``title_user``（opencc 简繁转换）。
+
+        - 中文 UI：先查对应简体/繁体，缺翻译时查另一种体并用 opencc 转换，
+          再回退英语，最后回退影片原始标题。
+        - 英文 UI：先英语，最后原始标题。
+        ``episode_key=(season, episode)`` 时取集标题，否则取电影/剧集标题。
+        """
+        engine = self.config.get("localize.engine", "opencc") or "opencc"
+        for tmdb_code, mode in title_language_chain(ui_lang):
+            if episode_key is not None:
+                m = self.tmdb.get_episode(match.tmdb_id, episode_key[0],
+                                          episode_key[1], tmdb_code)
+                t = m.episode_title_user if m else None
+            else:
+                t = self.tmdb.get_title(match.tmdb_id, media_type, tmdb_code)
+            if looks_localized(t, match.title_orig):
+                return convert_title(t, mode, engine)
+        return match.title_orig
 
     def _finalize(self, item: QueueItem, options: ProcessingOptions,
                   values: Dict[str, object],

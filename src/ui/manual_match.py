@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from core.localize import tmdb_lang
 from core.providers import BaseProvider, MediaMatch
 
 
@@ -40,6 +41,7 @@ class ManualMatchDialog(QDialog):
         self.provider = provider
         self.media_type = media_type
         self.language = language
+        self._tmdb_lang = tmdb_lang(language)  # i18n code → TMDB 语言代码
         self.selected: Optional[MediaMatch] = None
         self.setWindowTitle("Manual Match")
         self.resize(520, 420)
@@ -94,7 +96,7 @@ class ManualMatchDialog(QDialog):
         if not query or not self.provider.available:
             return
         for m in self.provider.search(query, media_type=self.media_type,
-                                      language=self.language):
+                                      language=self._tmdb_lang):
             year = f"({m.year})" if m.year else ""
             text = f"{m.title_user} {year}  [原: {m.title_orig}]"
             item = QListWidgetItem(text)

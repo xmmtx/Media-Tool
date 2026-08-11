@@ -72,6 +72,7 @@ class ConfigStore(JsonStore):
                       "tv_anime": "", "tv_drama": "", "tv_doc": ""},
         },
         "logging": {"enabled": True},
+        "localize": {"engine": "opencc"},  # 简繁转换引擎: opencc | zhconv
     }
 
     def __init__(self, path: Optional[Path] = None) -> None:
