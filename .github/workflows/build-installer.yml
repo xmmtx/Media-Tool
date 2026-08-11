@@ -52,11 +52,13 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean --windowed --onedir `
             --name MediaTool `
+            --icon "src/assets/icon.ico" `
             --paths src `
             --collect-all qfluentwidgets `
             --collect-all PyQt6 `
             --add-data "src/i18n;i18n" `
             --add-data "src/assets/fonts;assets/fonts" `
+            --add-data "src/assets/icon.ico;assets" `
             --add-data "src/db/subgroups.json;db" `
             main.py
 
@@ -66,7 +68,8 @@ jobs:
           $root = "dist\MediaTool\_internal"
           foreach ($p in @(
             "i18n\zh_CN.json", "i18n\zh_TW.json", "i18n\en_US.json",
-            "assets\fonts\HarmonyOS_Sans_SC_Regular.ttf", "db\subgroups.json")) {
+            "assets\fonts\HarmonyOS_Sans_SC_Regular.ttf",
+            "assets\icon.ico", "db\subgroups.json")) {
             if (-not (Test-Path "$root\$p")) {
               Write-Error "missing bundled resource: $p"
               exit 1

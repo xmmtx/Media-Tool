@@ -44,6 +44,17 @@ qInstallMessageHandler(_qt_message_handler)
 LOGGER_LEVEL = os.environ.get("MEDIA_TOOL_LOG_LEVEL", "INFO")
 
 
+def _find_icon():
+    """定位应用图标：安装版在打包解压目录 ``assets/icon.ico``，开发版在 ``src/assets/icon.ico``。"""
+    if getattr(sys, "frozen", False):
+        base = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+        cand = os.path.join(base, "assets", "icon.ico")
+        if os.path.isfile(cand):
+            return cand
+    cand = os.path.join(str(_ROOT), "src", "assets", "icon.ico")
+    return cand if os.path.isfile(cand) else None
+
+
 def main() -> int:
     import logging
     import signal
@@ -62,6 +73,13 @@ def main() -> int:
     logger = logging.getLogger("main")
     enable_high_dpi()                    # 必须在 QApplication 之前
     app = QApplication(sys.argv)
+
+    # 窗口/任务栏图标：安装版从打包目录加载，开发版从 src/assets 加载
+    from PyQt6.QtGui import QIcon
+
+    _icon = _find_icon()
+    if _icon:
+        app.setWindowIcon(QIcon(_icon))
 
     # 终端 Ctrl+C 退出：Qt 事件循环阻塞时不会执行 Python 字节码，
     # SIGINT 处理器需靠定时器周期性唤醒才能被调用 → 触发 app.quit()

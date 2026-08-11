@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5B7CFA"/>
+      <stop offset="100%" stop-color="#8A5CF6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 圆角方形背景（品牌蓝→紫渐变） -->
+  <rect x="32" y="32" width="448" height="448" rx="108" fill="url(#bg)"/>
+
+  <!-- 顶部高光 -->
+  <path d="M32 140 Q32 32 140 32 H372 Q480 32 480 140 V150 Q300 -10 32 180 Z"
+        fill="#ffffff" opacity="0.10"/>
+
+  <!-- 中央播放三角（媒体） -->
+  <path d="M196 156 L352 256 L196 356 Z" fill="#ffffff"/>
+
+  <!-- 右上角金色徽章：自动整理 / 重命名完成 -->
+  <circle cx="372" cy="146" r="64" fill="#FFC24B"/>
+  <circle cx="372" cy="146" r="64" fill="none" stroke="#ffffff" stroke-width="6" opacity="0.55"/>
+  <!-- 徽章内对勾 -->
+  <path d="M336 146 L364 174 L410 118" fill="none" stroke="#5B3FC0"
+        stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
