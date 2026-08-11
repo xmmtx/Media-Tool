@@ -9,11 +9,17 @@
 from __future__ import annotations
 
 import logging
+import os
+import sys
 import zipfile
 from datetime import datetime
 from pathlib import Path
 
-LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
+# 日志目录：安装版写到 %APPDATA%/MediaTool/logs（Program Files 只读），开发版沿用 src/logs
+if getattr(sys, "frozen", False):
+    LOGS_DIR = Path(os.environ.get("APPDATA") or Path.home()) / "MediaTool" / "logs"
+else:
+    LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 _LATEST_NAME = "latest.log"
 
 _FMT = logging.Formatter(

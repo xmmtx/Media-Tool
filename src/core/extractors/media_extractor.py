@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import warnings
@@ -353,15 +354,30 @@ def extract_from_filename(name: str) -> MediaInfo:
 
 # ── 分辨率实测（ffprobe）──────────────────────────────────────────────────
 
+def _ffprobe_cmd() -> Optional[str]:
+    """定位 ffprobe 可执行文件：先 PATH，其次 PyInstaller 打包同目录（捆绑的 ffprobe.exe）。"""
+    found = shutil.which("ffprobe")
+    if found:
+        return found
+    if getattr(sys, "frozen", False):  # PyInstaller：exe 同目录可能捆绑了 ffprobe.exe
+        local = os.path.join(os.path.dirname(sys.executable), "ffprobe.exe")
+        if os.path.isfile(local):
+            return local
+    return None
+
+
 def probe_resolution(path: str, timeout: float = 5.0) -> Optional[str]:
     """用 ffprobe 读取第一个视频流的实际分辨率，如 ``1920x1080``。
 
     任何失败（ffprobe 不存在 / 文件不存在 / 非视频 / 超时）均返回 ``None``。
     """
+    ffprobe = _ffprobe_cmd()
+    if not ffprobe:
+        return None
     try:
         result = subprocess.run(
             [
-                "ffprobe", "-v", "error",
+                ffprobe, "-v", "error",
                 "-select_streams", "v:0",
                 "-show_entries", "stream=width,height",
                 "-of", "json", path,

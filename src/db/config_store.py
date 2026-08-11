@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .json_store import JsonStore
+from .paths import app_data_dir
 
 logger = logging.getLogger("db.config")
 
@@ -76,7 +77,7 @@ class ConfigStore(JsonStore):
     }
 
     def __init__(self, path: Optional[Path] = None) -> None:
-        path = path or Path(__file__).resolve().parent / "config.json"
+        path = path or app_data_dir() / "config.json"
         super().__init__(path, default_data=self.DEFAULT)
 
     # ── 点路径访问 ────────────────────────────────────────────────────────

@@ -25,11 +25,14 @@ from __future__ import annotations
 
 import logging
 import re
+import shutil
+import sys
 from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from .json_store import JsonStore
+from .paths import app_data_dir, is_frozen
 
 logger = logging.getLogger("db.subgroups")
 
@@ -46,8 +49,18 @@ class SubgroupStore(JsonStore):
     DEFAULT: Dict = {"groups": {}}
 
     def __init__(self, path: Optional[Path] = None) -> None:
-        path = path or Path(__file__).resolve().parent / "subgroups.json"
+        path = path or self._default_path()
         super().__init__(path, default_data=self.DEFAULT)
+
+    def _default_path(self) -> Path:
+        """安装版首次运行把内置 subgroups.json 复制到 %APPDATA% 后可写；开发版直接用 src/db。"""
+        default = app_data_dir() / "subgroups.json"
+        if is_frozen() and not default.exists():
+            bundled = Path(__file__).resolve().parent / "subgroups.json"
+            if bundled.exists():
+                default.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(bundled, default)
+        return default
 
     # ── 查询 ──────────────────────────────────────────────────────────────
 

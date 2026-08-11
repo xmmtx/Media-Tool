@@ -1,0 +1,131 @@
+# Build the Windows installer for MediaTool.
+#
+# Triggers:
+#   - pushing a tag like v1.2.3  -> builds installer + publishes a GitHub release
+#   - manual workflow_dispatch   -> builds + uploads artifacts (no release)
+#
+# Outputs (uploaded as artifacts / release assets):
+#   dist/MediaTool-Setup-<version>.exe        Inno Setup installer
+#   dist/MediaTool-<version>-portable.zip     portable (no-install) build
+#
+# Version is taken from the git tag (v-prefix stripped); without a tag it
+# falls back to 0.0.<run_number> so Inno always gets a valid X.Y.Z number.
+
+name: Build Windows Installer
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      # one-dir bundle: more reliable resource collection than onefile,
+      # and Inno Setup turns it into a proper installer.
+      # --paths src makes the runtime sys.path packages (db/ui/core/i18n,
+      # logging_setup) visible to PyInstaller's static analysis.
+      # --collect-all qfluentwidgets / PyQt6 pulls in qss/qrc resources + Qt plugins.
+      # The --add-data destinations are relative to _internal (PyInstaller 6),
+      # matching how the code locates them via __file__ (e.g. i18n/*.json).
+      - name: Build with PyInstaller (onedir)
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --windowed --onedir `
+            --name MediaTool `
+            --paths src `
+            --collect-all qfluentwidgets `
+            --collect-all PyQt6 `
+            --add-data "src/i18n;i18n" `
+            --add-data "src/assets/fonts;assets/fonts" `
+            --add-data "src/db/subgroups.json;db" `
+            main.py
+
+      - name: Verify bundled resources
+        shell: pwsh
+        run: |
+          $root = "dist\MediaTool\_internal"
+          foreach ($p in @(
+            "i18n\zh_CN.json", "i18n\zh_TW.json", "i18n\en_US.json",
+            "assets\fonts\HarmonyOS_Sans_SC_Regular.ttf", "db\subgroups.json")) {
+            if (-not (Test-Path "$root\$p")) {
+              Write-Error "missing bundled resource: $p"
+              exit 1
+            }
+          }
+          Write-Host "All bundled resources present"
+
+      # windows-latest ships ffmpeg; copy ffprobe next to the exe so the
+      # resolution probe works out of the box (probe_resolution falls back
+      # to the exe dir when ffprobe is not on PATH).
+      - name: Bundle ffprobe (resolution probe)
+        shell: pwsh
+        run: |
+          $ff = Get-Command ffprobe -ErrorAction SilentlyContinue
+          if ($ff) {
+            Copy-Item $ff.Source -Destination "dist\MediaTool\ffprobe.exe" -Force
+            Write-Host "ffprobe bundled from $($ff.Source)"
+          } else {
+            Write-Host "::warning::ffprobe not found on runner - resolution probing disabled"
+          }
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $tag = git describe --tags --abbrev=0 2>$null
+          $v = if ($tag) { $tag -replace '^v','' } else { "0.0.$env:GITHUB_RUN_NUMBER" }
+          "MEDIA_TOOL_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          iscc /Qp /DMyAppVersion="$env:MEDIA_TOOL_VERSION" /O"dist" "packaging\installer.iss"
+
+      - name: Build portable zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist\MediaTool" -DestinationPath "dist\MediaTool-$env:MEDIA_TOOL_VERSION-portable.zip" -Force
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MediaTool-${{ env.MEDIA_TOOL_VERSION }}
+          path: |
+            dist/MediaTool-Setup*.exe
+            dist/MediaTool-*-portable.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub release (tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$env:GITHUB_REF_NAME" `
+            "dist\MediaTool-Setup-$env:MEDIA_TOOL_VERSION.exe" `
+            "dist\MediaTool-$env:MEDIA_TOOL_VERSION-portable.zip" `
+            --title "MediaTool $env:GITHUB_REF_NAME" --generate-notes
