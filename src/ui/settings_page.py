@@ -204,6 +204,11 @@ class SettingsPage(QWidget):
         lay.addWidget(self.lbl_artist_sep)
         lay.addWidget(self.artist_sep_edit)
 
+        # ── 日志 ──────────────────────────────────────────────────
+        self.logging_enable = SwitchButton(self._t("settings_logging_enable"), self)
+        self.logging_enable.checkedChanged.connect(self._mark_dirty)
+        lay.addWidget(self.logging_enable)
+
         # ── 底部按钮行（右下角）：保存 + 取消 ──────────────────────
         btn_row = QHBoxLayout()
         btn_row.addStretch()
@@ -237,6 +242,7 @@ class SettingsPage(QWidget):
         for code in ("movie", "tv_anime", "tv_drama", "tv_doc", "music"):
             self.root_labels[code].setText(self._t("output_root_" + code))
         self.lbl_artist_sep.setText(self._t("artist_separator_label"))
+        self.logging_enable.setText(self._t("settings_logging_enable"))
         # 语言下拉：更新"跟随系统"文案并保持选中
         cur = self.lang_combo.currentData() or self.config.get("language", "zh_CN")
         self.lang_combo.blockSignals(True)
@@ -316,6 +322,7 @@ class SettingsPage(QWidget):
             "output.roots.tv_doc": (self.config.get("output.roots", {}) or {}).get("tv_doc", ""),
             "output.roots.music": (self.config.get("output.roots", {}) or {}).get("music", ""),
             "music.artist_separators": self.config.get("music.artist_separators", ""),
+            "logging.enabled": bool(self.config.get("logging.enabled", True)),
         }
 
     def _current(self) -> Dict:
@@ -337,6 +344,7 @@ class SettingsPage(QWidget):
             "output.roots.tv_doc": self.root_edits["tv_doc"].text().strip(),
             "output.roots.music": self.root_edits["music"].text().strip(),
             "music.artist_separators": self.artist_sep_edit.text().strip(),
+            "logging.enabled": self.logging_enable.isChecked(),
         }
 
     def _mark_dirty(self, *_args) -> None:
@@ -397,6 +405,9 @@ class SettingsPage(QWidget):
         self.artist_sep_edit.blockSignals(True)
         self.artist_sep_edit.setText(self.config.get("music.artist_separators", ""))
         self.artist_sep_edit.blockSignals(False)
+        self.logging_enable.blockSignals(True)
+        self.logging_enable.setChecked(bool(self.config.get("logging.enabled", True)))
+        self.logging_enable.blockSignals(False)
         self._update_roots_visibility()
 
     def _save(self) -> None:
@@ -425,6 +436,10 @@ class SettingsPage(QWidget):
         self.config.set("output.mode", self.output_mode_combo.currentData() or "custom")
         self.config.set("output.roots", roots)
         self.config.set("music.artist_separators", self.artist_sep_edit.text().strip())
+        self.config.set("logging.enabled", self.logging_enable.isChecked())
+        # 立即生效：动态启停文件日志写入
+        from logging_setup import set_logging_enabled
+        set_logging_enabled(self.logging_enable.isChecked())
 
         self._saved = self._snapshot()
         self.btn_save.setEnabled(False)

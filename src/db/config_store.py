@@ -71,6 +71,7 @@ class ConfigStore(JsonStore):
             "roots": {"movie": "", "music": "",
                       "tv_anime": "", "tv_drama": "", "tv_doc": ""},
         },
+        "logging": {"enabled": True},
     }
 
     def __init__(self, path: Optional[Path] = None) -> None:

@@ -48,6 +48,7 @@ def main() -> int:
     import logging
     import signal
 
+    from logging_setup import setup_logging
     from PyQt6.QtCore import QTimer
     from PyQt6.QtWidgets import QApplication
 
@@ -55,7 +56,9 @@ def main() -> int:
     from ui.fonts import bundled_font_family, resolve_font_family, apply_font_family
     from ui.main_window import MainWindow, enable_high_dpi
 
-    setup_logging(getattr(logging, LOGGER_LEVEL.upper(), logging.INFO))
+    cfg = ConfigStore()
+    setup_logging(getattr(logging, LOGGER_LEVEL.upper(), logging.INFO),
+                  enabled=bool(cfg.get("logging.enabled", True)))
     logger = logging.getLogger("main")
     enable_high_dpi()                    # 必须在 QApplication 之前
     app = QApplication(sys.argv)
@@ -67,6 +70,9 @@ def main() -> int:
     _sigint_timer.start(200)
 
     def _on_sigint(*_args) -> None:
+        # 终端显示红色 ^C（ANSI 24 位真彩 #E74856），日志文件记录退出原因
+        sys.stderr.write("\x1b[38;2;231;72;86m^C\x1b[0m\n")
+        sys.stderr.flush()
         logger.info("收到 Ctrl+C，退出应用")
         app.quit()
 
@@ -74,7 +80,6 @@ def main() -> int:
 
     # 加载内置字体（reference）并按配置应用默认字体
     bundled_font_family()
-    cfg = ConfigStore()
     apply_font_family(resolve_font_family(cfg.get("font_family", "")))
 
     window = MainWindow(config=cfg)

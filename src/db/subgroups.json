@@ -21,7 +21,7 @@
       "added": "2026-08-10"
     },
     "GM-Team": {
-      "rename_to": "GM-Team",
+      "rename_to": "GM",
       "aliases": [
         "GM-Team",
         "GMTeam"
@@ -158,14 +158,6 @@
       ],
       "added": "2026-08-10"
     },
-    "百冬練習組": {
-      "rename_to": "百冬",
-      "aliases": [
-        "百冬練習組",
-        "百冬练习组"
-      ],
-      "added": "2026-08-10"
-    },
     "Prejudice-Studio": {
       "rename_to": "Prejudice",
       "aliases": [
@@ -222,6 +214,14 @@
         "ReinForce"
       ],
       "added": "2026-08-10"
+    },
+    "百冬练习组": {
+      "rename_to": "百冬",
+      "aliases": [
+        "百冬練習組",
+        "百冬练习组"
+      ],
+      "added": "2026-08-11"
     }
   }
 }

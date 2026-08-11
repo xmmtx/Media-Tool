@@ -59,32 +59,52 @@ DEFAULT_FORMATS = {
 
 
 class ProcessingThread(QThread):
-    """后台批处理线程：逐文件调用 Processor 并汇报进度。"""
+    """后台线程：匹配（dry_run）或执行（pending 项）。
+
+    - ``pending=None``：对 ``files`` 逐文件 ``process_file``（是否执行文件操作
+      由 options.dry_run 决定）。
+    - 传入 ``pending`` 列表：对每个项 ``execute_item``（执行已匹配项的操作）。
+    """
 
     item_done = pyqtSignal(object)          # QueueItem
     progress = pyqtSignal(int)
     finished_all = pyqtSignal(int, int, int)  # ok, manual, error
 
     def __init__(self, processor: Processor, files: List[str],
-                 options: ProcessingOptions) -> None:
+                 options: ProcessingOptions,
+                 pending: Optional[List[QueueItem]] = None) -> None:
         super().__init__()
         self.processor = processor
         self.files = files
         self.options = options
+        self.pending = pending
 
     def run(self) -> None:
-        total = len(self.files)
         ok = manual = err = 0
-        for i, path in enumerate(self.files):
-            item = self.processor.process_file(path, self.options)
-            if item.status == "ok":
-                ok += 1
-            elif item.status == "manual":
-                manual += 1
-            else:
-                err += 1
-            self.item_done.emit(item)
-            self.progress.emit(int((i + 1) / total * 100) if total else 100)
+        if self.pending is not None:
+            total = len(self.pending)
+            for i, item in enumerate(self.pending):
+                result = self.processor.execute_item(item, self.options)
+                if result.status == "ok":
+                    ok += 1
+                elif result.status == "manual":
+                    manual += 1
+                else:
+                    err += 1
+                self.item_done.emit(result)
+                self.progress.emit(int((i + 1) / total * 100) if total else 100)
+        else:
+            total = len(self.files)
+            for i, path in enumerate(self.files):
+                item = self.processor.process_file(path, self.options)
+                if item.status == "ok":
+                    ok += 1
+                elif item.status == "manual":
+                    manual += 1
+                else:
+                    err += 1
+                self.item_done.emit(item)
+                self.progress.emit(int((i + 1) / total * 100) if total else 100)
         self.finished_all.emit(ok, manual, err)
 
 
@@ -135,6 +155,8 @@ class MediaPage(QWidget):
         self.config = config
         self._paths: List[str] = []          # 与表格行一一对应
         self._manual_map: Dict[str, QueueItem] = {}
+        self._pending: List[QueueItem] = []  # 已匹配待执行项
+        self._phase = "idle"                 # idle | match | execute
         self._thread: Optional[ProcessingThread] = None
         self._build_ui()
         self._retranslate()
@@ -261,7 +283,8 @@ class MediaPage(QWidget):
         self.match_box.setVisible(self.kind == "tv")
 
         self.btn_process = PrimaryPushButton(self)
-        self.btn_process.clicked.connect(self._start_process)
+        self.btn_process.clicked.connect(self._execute_pending)
+        self.btn_process.setEnabled(False)  # 匹配完成后才亮起
         p.addWidget(self.btn_process)
         p.addStretch()
 
@@ -299,7 +322,7 @@ class MediaPage(QWidget):
         self.lbl_match.setText(self._t("match_label"))
         self.btn_manual_match.setText(self._t("btn_manual_match"))
         self.btn_auto_match.setText(self._t("btn_auto_match"))
-        self.btn_process.setText(self._t("start_processing"))
+        self.btn_process.setText(self._t("btn_execute"))
         self.btn_undo.setText(self._t("undo"))
         # 处理方式下拉保持选中项，仅重设文本
         idx = self.mode_op_combo.currentIndex()
@@ -361,9 +384,12 @@ class MediaPage(QWidget):
 
     def _remove_selected(self) -> None:
         rows = sorted({i.row() for i in self.table.selectedItems()}, reverse=True)
+        removed = {self._paths[r] for r in rows}
         for r in rows:
             self.table.removeRow(r)
             del self._paths[r]
+        self._pending = [p for p in self._pending if p.path not in removed]
+        self.btn_process.setEnabled(bool(self._pending))
         logger.info("移除 %d 个选中文件", len(rows))
         self._update_drop_hint()
 
@@ -371,6 +397,8 @@ class MediaPage(QWidget):
         self.table.setRowCount(0)
         self._paths.clear()
         self._manual_map.clear()
+        self._pending.clear()
+        self.btn_process.setEnabled(False)
         self.lbl_status.setText(self._t("status_ready", count=0))
         logger.info("清空文件列表")
         self._update_drop_hint()
@@ -411,9 +439,9 @@ class MediaPage(QWidget):
         )
 
     def _on_auto_match(self) -> None:
-        """自动匹配：走现有批处理；失败（manual）项自动打开手动匹配。"""
+        """自动匹配：解析 + TMDB 搜索，预览目标名（dry_run），不执行文件操作。"""
         self._fallback_manual = True
-        self._start_process()
+        self._start_match()
 
     def _on_manual_match(self) -> None:
         """手动匹配：搜索节目 → 多选集 → 发送到节目页匹配。"""
@@ -449,10 +477,13 @@ class MediaPage(QWidget):
             self._apply_episode_match(dlg.selected_show, dlg.selected_episodes, targets)
 
     def _apply_episode_match(self, show, episodes, paths) -> None:
-        """按 (season, episode) 把选中的集匹配到文件并处理。"""
+        """按 (season, episode) 把选中的集匹配到文件（dry_run，待用户点执行）。"""
         ep_index = {(e["season"], e["episode"]): e["name"] for e in episodes}
         show_title = (show.title_orig if show else "") or ""
         logger.info("手动匹配: 剧集=%s 选中 %d 集", show_title, len(episodes))
+        options = self._options()
+        options.dry_run = True
+        self._phase = "match"
         matched = 0
         for path in list(paths):
             info = extract_from_filename(path)
@@ -466,30 +497,61 @@ class MediaPage(QWidget):
                 forced["season"] = info.season
             if info.episode is not None:
                 forced["episode"] = info.episode
-            item = self.processor.process_file(path, self._options(),
-                                               forced_values=forced)
+            item = self.processor.process_file(path, options, forced_values=forced)
             self._on_item_done(item)
             if item.status == "ok":
                 self._manual_map.pop(path, None)
             matched += 1
+        self.btn_process.setEnabled(bool(self._pending))
         self.lbl_status.setText(self._t("manual_matched", count=matched))
 
-    def _start_process(self) -> None:
+    def _start_match(self) -> None:
+        """匹配阶段：dry_run 处理所有文件（只算目标名，不做文件操作）。"""
         self._fallback_manual = False
         paths = list(self._paths)
         if not paths:
             QMessageBox.information(self, self._t("err_title"), self._t("err_no_files"))
             return
-        logger.info("开始处理 %d 个文件 (kind=%s)", len(paths), self.kind)
-        self.btn_process.setEnabled(False)
-        self.btn_undo.setEnabled(False)
-        self.progress.setValue(0)
-        self.progress.show()
-        self._thread = ProcessingThread(self.processor, paths, self._options())
+        logger.info("开始匹配 %d 个文件 (kind=%s)", len(paths), self.kind)
+        self._phase = "match"
+        self._pending = []
+        options = self._options()
+        options.dry_run = True
+        self._set_busy(True)
+        self._thread = ProcessingThread(self.processor, paths, options)
         self._thread.item_done.connect(self._on_item_done)
         self._thread.progress.connect(self.progress.setValue)
         self._thread.finished_all.connect(self._on_all_done)
         self._thread.start()
+
+    def _execute_pending(self) -> None:
+        """执行阶段：对已匹配（pending）项执行真实文件操作。"""
+        items = [i for i in self._pending if i.status == "ok"]
+        if not items:
+            QMessageBox.information(self, self._t("err_title"), self._t("err_no_matched"))
+            return
+        logger.info("执行 %d 个已匹配项 (mode=%s)", len(items), self._options().mode)
+        self._phase = "execute"
+        options = self._options()
+        options.dry_run = False
+        self._set_busy(True)
+        self._thread = ProcessingThread(self.processor, [], options, pending=items)
+        self._thread.item_done.connect(self._on_item_done)
+        self._thread.progress.connect(self.progress.setValue)
+        self._thread.finished_all.connect(self._on_all_done)
+        self._thread.start()
+
+    def _set_busy(self, busy: bool) -> None:
+        """切换忙碌状态：禁用操作按钮 + 进度条显隐。"""
+        self.btn_auto_match.setEnabled(not busy)
+        self.btn_manual_match.setEnabled(not busy)
+        self.btn_process.setEnabled(not busy and bool(self._pending))
+        self.btn_undo.setEnabled(not busy and bool(self.processor.operator.history))
+        if busy:
+            self.progress.setValue(0)
+            self.progress.show()
+        else:
+            self.progress.hide()
 
     def _on_item_done(self, item: QueueItem) -> None:
         try:
@@ -508,19 +570,32 @@ class MediaPage(QWidget):
             Qt.GlobalColor.green if item.status == "ok"
             else Qt.GlobalColor.red if item.status == "error"
             else Qt.GlobalColor.darkYellow)
-        if item.status == "manual":
+        if item.status == "ok":
+            if self._phase == "match" and item not in self._pending:
+                self._pending.append(item)
+            elif self._phase == "execute":
+                self._pending = [p for p in self._pending if p is not item]
+        elif item.status == "manual":
             self._manual_map[item.path] = item
+        # 匹配阶段：有可执行项即点亮执行按钮
+        if self._phase != "execute":
+            self.btn_process.setEnabled(bool(self._pending))
 
     def _on_all_done(self, ok: int, manual: int, err: int) -> None:
-        self.btn_process.setEnabled(True)
-        self.btn_undo.setEnabled(bool(self.processor.operator.history))
-        self.progress.hide()
-        self.lbl_status.setText(
-            self._t("status_done", ok=ok, manual=manual, error=err))
-        # 自动匹配失败（存在 manual 项）→ 自动打开手动匹配
-        if getattr(self, "_fallback_manual", False) and manual > 0:
-            self._fallback_manual = False
-            self._open_manual_match_for_manual_items()
+        phase = self._phase
+        self._phase = "idle"
+        self._set_busy(False)
+        if phase == "match":
+            self.lbl_status.setText(
+                self._t("status_matched", ok=len(self._pending),
+                        manual=manual, error=err))
+            # 自动匹配失败（存在 manual 项）→ 自动打开手动匹配
+            if getattr(self, "_fallback_manual", False) and manual > 0:
+                self._fallback_manual = False
+                self._open_manual_match_for_manual_items()
+        else:
+            self.lbl_status.setText(
+                self._t("status_done", ok=ok, manual=manual, error=err))
 
     def _on_cell_double_clicked(self, row: int, _col: int) -> None:
         path = self._paths[row] if row < len(self._paths) else None

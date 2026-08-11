@@ -87,6 +87,7 @@ class ProcessingOptions:
     language: str = "zh-CN"
     inject_cover: bool = False   # 音乐：是否注入封面
     cover_path: Optional[str] = None  # 封面图片路径，或源音乐文件路径（自动识别）
+    dry_run: bool = False       # 匹配阶段：只算目标名/路径，不执行文件操作
 
 
 @dataclass
@@ -101,6 +102,7 @@ class QueueItem:
     group: Optional[str] = None  # 规范组名（rename_to）
     format: str = ""             # 本次使用的表达式（reprocess 时复用）
     new_name: str = ""
+    dst: Optional[str] = None    # 匹配阶段计算出的目标路径（执行阶段使用）
     error: str = ""
     reason: str = ""             # manual 原因
 
@@ -393,7 +395,12 @@ class Processor:
             return self._to_manual(item, "format produced empty name")
         item.new_name = sanitize_filename(new_base) + ext
         dst = self._build_dst(item, options, values, ext)
+        item.dst = dst
         logger.info("格式化: %s -> %s", os.path.basename(item.path), item.new_name)
+        if options.dry_run:
+            # 匹配阶段：只计算目标名/路径，不执行文件操作（等用户点“执行”）
+            item.status = "ok"
+            return item
         result = self._apply_op(item.path, dst, options.mode)
         if not result.ok:
             item.status = "error"
@@ -481,6 +488,36 @@ class Processor:
         if mode == "hardlink":
             return self.operator.hardlink(src, dst)
         raise ValueError(f"unknown mode: {mode}")
+
+    def execute_item(self, item: QueueItem, options: ProcessingOptions) -> QueueItem:
+        """对已匹配（dry_run 完成）的项执行真实文件操作。
+
+        - 电影/剧集：直接 rename / copy / hardlink 到 :attr:`QueueItem.dst`。
+        - 音乐：操作后还在目标上写回拆分后的艺术家/封面（与直接处理一致）。
+        """
+        if item.status != "ok" or not item.dst:
+            return item  # 未匹配或已执行
+        result = self._apply_op(item.path, item.dst, options.mode)
+        if not result.ok:
+            item.status = "error"
+            item.error = result.error or "file operation failed"
+            logger.error("文件操作失败 %s -> %s: %s",
+                         item.path, item.dst, item.error)
+            return item
+        logger.info("文件操作 %s 成功: %s -> %s", options.mode, item.path, item.dst)
+        if item.kind == "music":
+            try:
+                tags = read_music_tags(item.path)
+                artists = split_artists(
+                    tags.get("artist"),
+                    self.config.get("music.artist_separators", ""))
+                self._apply_music_post(item.dst, artists, options)
+            except Exception as e:
+                item.status = "error"
+                item.error = f"post-processing failed: {e}"
+                return item
+        item.status = "ok"
+        return item
 
     def _to_manual(self, item: QueueItem, reason: str) -> QueueItem:
         item.status = "manual"
