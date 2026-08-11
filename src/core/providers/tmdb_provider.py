@@ -8,11 +8,15 @@
 from __future__ import annotations
 
 import json
+import logging
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import List, Optional
 
 from .base import BaseProvider, MediaMatch
+
+logger = logging.getLogger("core.tmdb")
 
 TMDB_API = "https://api.themoviedb.org/3"
 IMG_BASE = "https://image.tmdb.org/t/p/w500"
@@ -23,17 +27,18 @@ class TMDBProvider(BaseProvider):
 
     def __init__(self, config=None) -> None:
         super().__init__(config)
-        self.api_key = str(self._cfg("tmdb.api_key", "") or "")
+        # 注意：不缓存 api_key —— 用户可能在应用启动后才于设置页填入，
+        # 每次请求动态读取，让新 key 立即生效（否则启动后填 key 会一直匹配失败）。
 
     @property
     def available(self) -> bool:
-        return bool(self.api_key)
+        return bool(self._cfg("tmdb.api_key", ""))
 
     # ── 网络请求 ──────────────────────────────────────────────────────────
 
     def _request(self, path: str, params: dict) -> dict:
         params = dict(params)
-        params["api_key"] = self.api_key
+        params["api_key"] = str(self._cfg("tmdb.api_key", "") or "")
         url = f"{TMDB_API}{path}?{urllib.parse.urlencode(params)}"
         with urllib.request.urlopen(url, timeout=10) as resp:
             return json.loads(resp.read().decode("utf-8"))
@@ -55,7 +60,8 @@ class TMDBProvider(BaseProvider):
             params["year" if media_type == "movie" else "first_air_date_year"] = year
         try:
             data = self._request(path, params)
-        except (urllib.error.URLError, OSError, ValueError, KeyError):
+        except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
+            logger.warning("TMDB 搜索请求失败 %s: %s", path, e)
             return []
         return self._parse_matches(media_type, data.get("results", []))
 
@@ -97,7 +103,8 @@ class TMDBProvider(BaseProvider):
         path = f"/movie/{tmdb_id}" if media_type == "movie" else f"/tv/{tmdb_id}"
         try:
             data = self._request(path, {"language": language})
-        except (urllib.error.URLError, OSError, ValueError, KeyError):
+        except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
+            logger.warning("TMDB 标题请求失败 %s: %s", path, e)
             return None
         key = "title" if media_type == "movie" else "name"
         return data.get(key) or None
@@ -115,7 +122,8 @@ class TMDBProvider(BaseProvider):
         path = f"/tv/{tv_id}/season/{season}/episode/{episode}"
         try:
             data = self._request(path, {"language": language})
-        except (urllib.error.URLError, OSError, ValueError, KeyError):
+        except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
+            logger.warning("TMDB 剧集请求失败 %s: %s", path, e)
             return None
         if not data.get("name"):
             return None

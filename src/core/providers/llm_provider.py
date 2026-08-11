@@ -69,7 +69,7 @@ class LlmSubgroupProvider:
 
     @property
     def available(self) -> bool:
-        return bool(self.enabled and self.api_key)
+        return bool(self._cfg("llm.enabled", False) and self._cfg("llm.api_key", ""))
 
     # ── 对外接口 ──────────────────────────────────────────────────────────
 
@@ -78,6 +78,9 @@ class LlmSubgroupProvider:
 
         返回 ``{"subgroup": str, "aliases": [str]}``；无法识别或出错时返回 ``None``。
         """
+        # 每次调用前刷新配置：用户可能在应用启动后于设置页改了 LLM 配置，
+        # 若沿用构造时的缓存（api_key/base_url/enabled）会一直不生效。
+        self._load_config()
         if not self.available or not raw:
             return None
         try:
