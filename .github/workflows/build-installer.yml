@@ -115,8 +115,22 @@ jobs:
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "Resolved version: $v"
 
-      - name: Install Inno Setup
-        run: choco install innosetup --no-progress -y
+      # chocolatey 的 innosetup 包缺 Languages\ChineseSimplified.isl；
+      # 改用官方完整安装包（含全部语言），静默安装并加入 PATH。
+      - name: Install Inno Setup (official)
+        shell: pwsh
+        run: |
+          $url = "https://files.jrsoftware.org/is/6/innosetup-6.7.3.exe"
+          $setup = "$env:TEMP\innosetup.exe"
+          Invoke-WebRequest $url -OutFile $setup
+          Start-Process -Wait -FilePath $setup -ArgumentList @(
+            "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-")
+          $dir = "${env:ProgramFiles(x86)}\Inno Setup 6"
+          if (-not (Test-Path "$dir\ISCC.exe")) { throw "Inno Setup install failed" }
+          if (-not (Test-Path "$dir\Languages\ChineseSimplified.isl")) {
+            throw "ChineseSimplified.isl missing"
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
 
       - name: Build installer (Inno Setup)
         shell: pwsh
