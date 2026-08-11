@@ -36,18 +36,22 @@ _QUALITY_RE = re.compile(
 _CODEC_RE = re.compile(r"[hx]\.?26[45]|HEVC|AVC|AV1", re.I)
 _GROUP_RE = re.compile(r"[-\[(]\s*([^-\]()]+?)\s*[\]\s)]*$")
 
-# extras 类型识别：文件名中的标记 → Jellyfin 规范子目录名
-# （含番剧常见的 NCOP/NCED/PV/CM/menu/Tokuten/特典 等标记）
+# extras 类型识别：文件名中的标记 → Jellyfin 剧集 extras 子目录（小写规范）
+# 参考 Jellyfin 剧集 extras 目录: trailers / behind the scenes / featurettes /
+# shorts / scenes / deleted scenes / interviews / samples / clips / extras
+# 顺序敏感：先匹配更具体的（如 special scene → scenes），后兜底到 extras。
 _EXTRAS_PATTERNS = [
-    (r"behind\s+the\s+scenes", "Behind the Scenes"),
-    (r"trailers?|\bpv\b|\bcm\b", "Trailers"),
-    (r"theme[\s\-_]*(?:music|song)", "Theme Music"),
-    (r"deleted\s+scenes", "Deleted Scenes"),
-    (r"featurettes?|tokuten|特典", "Featurettes"),
-    (r"interviews?", "Interviews"),
-    (r"samples?", "Samples"),
-    (r"shorts?|\bsp\b", "Shorts"),
-    (r"ncop|nced|\bop\b|\bed\b|menu", "Other"),
+    (r"trailers?|teasers?|\bcm\b|\bpv\b|web[\s\-_]*preview|web[\s\-_]*预告|预告", "trailers"),
+    (r"behind\s+the\s+scenes|making\s+of|location\s+scouting|staff[\s\-_]*voice|"
+     r"cast[\s\-_]*voice|disc[\s\-_]*menu|\bmenu\b|制作特辑|幕后|花絮", "behind the scenes"),
+    (r"featurettes?|mini[\s\-_]*(?:drama|theater)|bd[\s\-_]*bonus|\bbonus\b|画集", "featurettes"),
+    (r"shorts?|petit|spinoff|迷你|小剧场|短篇", "shorts"),
+    (r"deleted\s+scen(?:e|es)|uncut|未放送|删减片段", "deleted scenes"),
+    (r"special[\s\-_]*(?:scene|clip)|highlight|名场面|精彩片段|\bscenes?\b", "scenes"),
+    (r"interviews?|cast[\s\-_]*(?:talk|interview)|stage[\s\-_]*greeting|舞台挨拶|采访", "interviews"),
+    (r"samples?|试听|试看", "samples"),
+    (r"clips?|短片|剪辑", "clips"),
+    (r"ncop|nced|\bop\b|\bed\b|\bsp\b|tokuten|特典|特别篇|特别编", "extras"),
 ]
 
 
