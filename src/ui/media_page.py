@@ -397,10 +397,14 @@ class MediaPage(QWidget):
                 for root, _dirs, files in os.walk(p):
                     for name in files:
                         full = os.path.join(root, name)
+                        # 仅收集可处理的媒体文件（视频/字幕/音频），
+                        # 滤掉 .nfo/.jpg/.7z 等交给 Jellyfin 刮削的附属文件
+                        if not Processor.is_media(full):
+                            continue
                         if full not in existing:
                             self._add_row(full)
                             existing.add(full)
-            elif os.path.isfile(p) and p not in existing:
+            elif os.path.isfile(p) and Processor.is_media(p) and p not in existing:
                 self._add_row(p)
                 existing.add(p)
 

@@ -26,6 +26,14 @@ logger = logging.getLogger("core.processing")
 # 字幕文件扩展名（跟随视频自动改名/移动）
 SUBTITLE_EXTS = {".ass", ".srt", ".ssa", ".vtt"}
 
+# 视频 / 音频扩展名（拖拽文件夹时仅收集可处理的媒体文件）
+VIDEO_EXTS = {".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm",
+              ".m4v", ".ts", ".m2ts", ".rmvb", ".rm", ".mpg", ".mpeg",
+              ".vob", ".3gp", ".ogv", ".asf", ".divx", ".m2v"}
+AUDIO_EXTS = {".mp3", ".flac", ".wav", ".aac", ".m4a", ".ogg", ".opus",
+              ".wma", ".ape", ".aiff", ".amr", ".alac"}
+MEDIA_EXTS = VIDEO_EXTS | AUDIO_EXTS | SUBTITLE_EXTS
+
 # 字幕语言标签规范化：常见中文标签 → Jellyfin 式“简中/繁中”
 _SUBTITLE_LANG_NORM = {
     "sc": "简中", "chs": "简中", "scjp": "简中", "简体": "简中",
@@ -193,6 +201,11 @@ class Processor:
     def is_subtitle(path: str) -> bool:
         """是否字幕文件（扩展名判断）。"""
         return os.path.splitext(path)[1].lower() in SUBTITLE_EXTS
+
+    @staticmethod
+    def is_media(path: str) -> bool:
+        """是否可处理的媒体文件（视频/音频/字幕），供拖拽文件夹时过滤非媒体文件。"""
+        return os.path.splitext(path)[1].lower() in MEDIA_EXTS
 
     def reset_match_cache(self) -> None:
         """清空本批次视频匹配缓存（开始新一批匹配前调用）。"""
@@ -512,6 +525,12 @@ class Processor:
         if rest and re.match(r"^[^\s\-–\[()\]\d]", rest):
             whole = _norm_extras_fragment(base[m.start():])
             return whole, None, None
+        # 光盘盘号：``[D1]`` / ``[D2]`` → 前置 ``Disc N``，如 ``Disc 1 Menu 01.mkv``
+        m_disc = re.search(r"\[[Dd]\d+\]", rest)
+        if m_disc:
+            disc_no = re.search(r"\d+", m_disc.group()).group()
+            frag = f"Disc {disc_no} {frag}"
+            rest = rest.replace(m_disc.group(), " ")
         # 序号：类型词后紧邻的第一个数字（可能在方括号内）
         seq_rest = re.sub(r"^[\s\-–\[\]\(\)]+", "", rest)
         seq_rest = _EXTRAS_DETAIL_RE.sub(" ", seq_rest)
