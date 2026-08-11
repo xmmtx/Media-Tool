@@ -1,8 +1,9 @@
 # Build the Windows installer for MediaTool.
 #
 # Triggers:
-#   - pushing a tag like v1.2.3  -> builds installer + publishes a GitHub release
-#   - manual workflow_dispatch   -> builds + uploads artifacts (no release)
+#   - every push (any branch)  -> builds installer + uploads artifacts
+#   - pushing a tag like v1.2.3 -> builds + publishes a GitHub release
+#   - manual workflow_dispatch  -> builds + uploads artifacts (no release)
 #
 # Outputs (uploaded as artifacts / release assets):
 #   dist/MediaTool-Setup-<version>.exe        Inno Setup installer
@@ -15,6 +16,7 @@ name: Build Windows Installer
 
 on:
   push:
+    branches: ['**']
     tags: ['v*']
   workflow_dispatch:
 
