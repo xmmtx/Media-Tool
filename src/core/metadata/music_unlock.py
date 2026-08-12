@@ -6,7 +6,7 @@
 - KGG v5 密钥数据库：优先用设置页配置的路径（``music.kugou_db``）；留空则自动
   检测 ``%APPDATA%\\Kugou8\\KGMusicV3.db``；两者都无效时解密报错并提示手动配置。
 - 解密输出写回源文件所在目录（文件名去加密后缀 + 探测出的音频扩展名），
-  解密成功即删除加密源文件（CLI ``--remove-source``），符合「转换后放在原目录」。
+  保留加密源文件（不删除，由用户决定是否手动清理）。
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ def decrypt_kugou(path: str, kugou_db: str = "") -> List[str]:
 
     out_dir = os.path.dirname(os.path.abspath(path))
     before = set(os.listdir(out_dir))
-    args = [cmd, "-o", out_dir, "--remove-source", path]
+    args = [cmd, "-o", out_dir, path]  # 保留加密源（不删），产物输出到同目录
     if db:  # 配置了/检测到 db 才传，否则让 CLI 用内置默认路径
         args[1:1] = ["--kgg-db", db]
     logger.info("酷狗解密: %s -> %s (db=%s)", os.path.basename(path), out_dir, db)
@@ -100,10 +100,16 @@ def decrypt_kugou(path: str, kugou_db: str = "") -> List[str]:
         logger.error("酷狗解密失败 %s: %s", path, detail)
         raise UnlockError(f"酷狗解密失败：{detail[:300]}")
 
-    # 目录快照对比取本次生成的明文文件（源加密文件已删除，也不会误收其他同名前缀）
+    # 目录快照对比取本次新生成的明文文件（加密源保留在 before 中，不会误收）
     new_files = set(os.listdir(out_dir)) - before
     found = [os.path.join(out_dir, n) for n in new_files
              if os.path.splitext(n)[1].lower() not in KUGOU_EXTS]
+    if not found:
+        # CLI 默认不覆盖已存在的输出（明文已生成过）→ 回退查找同 stem 明文
+        stem = os.path.splitext(os.path.basename(path))[0]
+        found = [os.path.join(out_dir, n) for n in os.listdir(out_dir)
+                 if n.startswith(stem + ".") and n != os.path.basename(path)
+                 and os.path.splitext(n)[1].lower() not in KUGOU_EXTS]
     if not found:
         raise UnlockError(f"酷狗解密未生成输出文件：{os.path.basename(path)}")
     logger.info("酷狗解密完成: %s", [os.path.basename(f) for f in found])

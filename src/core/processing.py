@@ -68,8 +68,10 @@ from .metadata.music_tags import (
 )
 from .metadata.music_unlock import KUGOU_EXTS, UnlockError, decrypt_kugou
 
-# 酷狗加密音频（.kgm/.vpr/.kgg）纳入媒体收集，_process_music 会先解密
+# 酷狗加密音频（.kgm/.vpr/.kgg/.kgma）纳入媒体收集。注意 MEDIA_EXTS 是
+# 模块顶部 union 出来的拷贝，必须在此一并追加，否则拖拽收集（is_media）漏判。
 AUDIO_EXTS |= KUGOU_EXTS
+MEDIA_EXTS |= KUGOU_EXTS
 from .providers import LlmSubgroupProvider, MediaMatch, TMDBProvider
 
 # Windows 非法文件名字符（含控制符）
@@ -169,6 +171,7 @@ class QueueItem:
     dst: Optional[str] = None    # 匹配阶段计算出的目标路径（执行阶段使用）
     error: str = ""
     reason: str = ""             # manual 原因
+    source_path: str = ""        # 处理前原始路径（解密等变换后供 UI 定位行）
 
     def as_dict(self) -> dict:
         return {
@@ -418,6 +421,7 @@ class Processor:
                 return self._to_manual(item, str(e))
             if not decrypted:
                 return self._to_manual(item, "酷狗解密未生成输出文件")
+            item.source_path = item.path  # 记录原始加密路径，供 UI 定位行
             item.path = decrypted[0]
         tags = read_music_tags(item.path)
         title = (tags.get("title") or [""])[0].strip()
@@ -433,7 +437,10 @@ class Processor:
             values["title"] = title
         if "artist" in needed or is_library:
             values["artist"] = self._artist_join_sep().join(artists)
-        if "album" in needed and tags.get("album"):
+        if is_library and artists:
+            values["artist_first"] = artists[0]  # 媒体库目录用第一位艺术家
+        if ("album" in needed or is_library) and tags.get("album"):
+            # 媒体库模式目录结构 Music/Artist/Album 恒需专辑，不依赖格式表达式
             values["album"] = tags["album"][0]
         if "year" in needed and tags.get("date"):
             values["year"] = str(tags["date"][0])[:4]
@@ -445,9 +452,14 @@ class Processor:
         return self._finalize(item, options, values, post=post)
 
     def _artist_join_sep(self) -> str:
-        """多艺术家拼接分隔符：取设置页"歌手分割符"配置的第一个字符。"""
-        sep = self.config.get("music.artist_separators", "") or "、"
-        return sep[0] if sep else "、"
+        """多艺术家拼接分隔符：配置含空格（如 ", "）整体作为连接符；
+        纯字符集合（如 "、,，"）取第一个字符；默认英文逗号加空格 ", "。"""
+        sep = self.config.get("music.artist_separators", "") or ", "
+        if not sep:
+            return ", "
+        if any(c.isspace() for c in sep):
+            return sep
+        return sep[0]
 
     # ── 字幕跟随视频 ─────────────────────────────────────────────────────
 
@@ -813,7 +825,8 @@ class Processor:
             season = int(values.get("season") or (info.season if info else 1))
             folder = os.path.join(folder, f"Season {season:02d}")
         elif item.kind == "music":
-            artist = sanitize_filename(str(values.get("artist") or "Unknown Artist"))
+            artist = sanitize_filename(str(
+                values.get("artist_first") or values.get("artist") or "Unknown Artist"))
             album = sanitize_filename(str(values.get("album") or "Unknown Album"))
             folder = os.path.join(artist, album)
 

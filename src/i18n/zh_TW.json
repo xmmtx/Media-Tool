@@ -14,6 +14,7 @@
   "mode_tv": "劇集",
   "mode_music": "音樂",
   "mode_rename": "重新命名",
+  "mode_move": "移動",
   "mode_copy": "複製",
   "mode_hardlink": "硬連結",
   "format_label": "格式運算式",

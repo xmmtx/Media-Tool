@@ -74,7 +74,9 @@ def split_artists(text: Union[str, List[str], None],
     if text is None:
         return []
     if separators:
-        pattern = "[" + "".join(re.escape(c) for c in separators) + "]"
+        # 空白不视为分隔符（避免把 "Ed Sheeran" 拆开）；", " 按逗号即可
+        chars = [c for c in separators if not c.isspace()]
+        pattern = "[" + "".join(re.escape(c) for c in chars) + "]"
     else:
         pattern = r"[、,，/;；]"
     if isinstance(text, list):

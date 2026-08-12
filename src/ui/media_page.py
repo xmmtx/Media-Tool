@@ -335,7 +335,10 @@ class MediaPage(QWidget):
         mb.addWidget(self.lbl_match)
         mb.addLayout(match_row)
         p.addWidget(self.match_box)
-        self.match_box.setVisible(self.kind == "tv")
+        # 匹配框：TV 显示手动+自动；音乐仅自动匹配（解密+预览新名）；电影不显示
+        self.match_box.setVisible(self.kind in ("tv", "music"))
+        self.btn_manual_match.setVisible(self.kind == "tv")
+        self.lbl_match.setVisible(self.kind == "tv")
 
         self.btn_process = PrimaryPushButton(self)
         self.btn_process.clicked.connect(self._execute_pending)
@@ -384,10 +387,8 @@ class MediaPage(QWidget):
         for _i, _code in enumerate(self._filter_codes):
             self.status_filter.setItemText(
                 _i, self._t("filter_all" if _code == "all" else "st_" + _code))
-        # 处理方式下拉保持选中项，仅重设文本
-        self.mode_radios["rename"].setText(self._t("mode_rename"))
-        self.mode_radios["copy"].setText(self._t("mode_copy"))
-        self.mode_radios["hardlink"].setText(self._t("mode_hardlink"))
+        # 处理方式保持选中项，仅重设文本（媒体库模式 rename 显示为 move）
+        self._update_mode_labels()
         self.table.setHorizontalHeaderLabels(
             [self._t("col_old_name"), self._t("col_new_name"), self._t("col_status")])
 
@@ -405,7 +406,8 @@ class MediaPage(QWidget):
         if it is None:
             it = QTableWidgetItem()
             self.table.setItem(row, col, it)
-        it.setText(stem or fullname)
+        # item 文本留空：显示完全交给下方透明 QLabel，避免与 item 文本叠加重影
+        it.setText("")
         it.setToolTip(fullname)
         w = QWidget(self.table)
         lay = QHBoxLayout(w)
@@ -515,9 +517,10 @@ class MediaPage(QWidget):
         self.drop_stack.setCurrentIndex(0 if not self._paths else 1)
 
     def showEvent(self, event) -> None:
-        """页面显示时按输出模式刷新"输出目录"输入框的可见性。"""
+        """页面显示时按输出模式刷新"输出目录"输入框与处理方式文案。"""
         super().showEvent(event)
         self._update_output_visibility()
+        self._update_mode_labels()
         logger.info("页面显示: %s (文件 %d 个)", self.kind, len(self._paths))
 
     def _update_output_visibility(self) -> None:
@@ -526,6 +529,14 @@ class MediaPage(QWidget):
         self.lbl_out.setVisible(is_custom)
         self.out_edit.setVisible(is_custom)
         self.btn_out.setVisible(is_custom)
+
+    def _update_mode_labels(self) -> None:
+        """媒体库模式下"重命名"显示为"移动"（跨目录 rename 即 move）。"""
+        is_library = self.config.get("output.mode", "custom") == "library"
+        self.mode_radios["rename"].setText(
+            self._t("mode_move" if is_library else "mode_rename"))
+        self.mode_radios["copy"].setText(self._t("mode_copy"))
+        self.mode_radios["hardlink"].setText(self._t("mode_hardlink"))
 
     # ── 处理 ──────────────────────────────────────────────────────────────
 
@@ -560,8 +571,9 @@ class MediaPage(QWidget):
         )
 
     def _on_auto_match(self) -> None:
-        """自动匹配：解析 + TMDB 搜索，预览目标名（dry_run），不执行文件操作。"""
-        self._fallback_manual = True
+        """自动匹配：解析 + 搜索，预览目标名（dry_run），不执行文件操作。"""
+        # 音乐页无手动匹配（EpisodeMatchDialog 仅 TV 用），失败留在人工队列即可
+        self._fallback_manual = self.kind != "music"
         self._start_match()
 
     def _on_manual_match(self) -> None:
@@ -676,8 +688,10 @@ class MediaPage(QWidget):
             self.progress.hide()
 
     def _on_item_done(self, item: QueueItem) -> None:
+        # 解密等变换会改写 item.path；用 source_path（处理前路径）定位表格行
+        key = item.source_path or item.path
         try:
-            row = self._paths.index(item.path)
+            row = self._paths.index(key)
         except ValueError:
             return
         self._set_name_cell(row, 1, item.new_name or "")
@@ -742,10 +756,23 @@ class MediaPage(QWidget):
     # ── 撤销 / 预览 / 目录 ────────────────────────────────────────────────
 
     def _undo(self) -> None:
+        """撤销全部文件操作，并把表格刷新回处理前状态（与原文件名/待处理一致）。"""
         n = self.processor.operator.undo_all()
         if n:
             self.lbl_status.setText(self._t("status_done", ok=n, manual=0, error=0))
-        self.btn_undo.setEnabled(bool(self.processor.operator.history))
+        # 撤销后 UI 必须还原：否则行仍显示新名/成功，看起来像"没撤销"
+        self._pending = []
+        for row in range(self.table.rowCount()):
+            it0 = self.table.item(row, 0)
+            path = it0.data(Qt.ItemDataRole.UserRole) if it0 else None
+            if path:
+                self._set_name_cell(row, 0, os.path.basename(path))
+            self._set_name_cell(row, 1, "")
+            st = self.table.item(row, 2)
+            if st:
+                st.setText(self._t("st_pending"))
+                st.setData(Qt.ItemDataRole.UserRole, "pending")
+        self._set_busy(False)
 
     def _update_preview(self) -> None:
         fmt = self.fmt_edit.text()

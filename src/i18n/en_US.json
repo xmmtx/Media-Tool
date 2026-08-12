@@ -14,6 +14,7 @@
   "mode_tv": "TV Shows",
   "mode_music": "Music",
   "mode_rename": "Rename",
+  "mode_move": "Move",
   "mode_copy": "Copy",
   "mode_hardlink": "Hardlink",
   "format_label": "Format Expression",

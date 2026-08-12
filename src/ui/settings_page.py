@@ -199,7 +199,7 @@ class SettingsPage(QWidget):
         # ── 音乐 ──────────────────────────────────────────────────
         self.lbl_artist_sep = StrongBodyLabel(self._t("artist_separator_label"))
         self.artist_sep_edit = LineEdit(self)
-        self.artist_sep_edit.setPlaceholderText("、,，")
+        self.artist_sep_edit.setPlaceholderText(", ")
         self.artist_sep_edit.textChanged.connect(self._mark_dirty)
         lay.addWidget(self.lbl_artist_sep)
         lay.addWidget(self.artist_sep_edit)
@@ -379,7 +379,7 @@ class SettingsPage(QWidget):
             "output.roots.tv_drama": self.root_edits["tv_drama"].text().strip(),
             "output.roots.tv_doc": self.root_edits["tv_doc"].text().strip(),
             "output.roots.music": self.root_edits["music"].text().strip(),
-            "music.artist_separators": self.artist_sep_edit.text().strip(),
+            "music.artist_separators": self.artist_sep_edit.text(),  # 分隔符可能含空格，不 strip
             "music.kugou_db": self.kugou_db_edit.text().strip(),
             "logging.enabled": self.logging_enable.isChecked(),
             "localize.engine": self.convert_engine_combo.currentData() or "opencc",
@@ -481,7 +481,7 @@ class SettingsPage(QWidget):
         }
         self.config.set("output.mode", self.output_mode_combo.currentData() or "custom")
         self.config.set("output.roots", roots)
-        self.config.set("music.artist_separators", self.artist_sep_edit.text().strip())
+        self.config.set("music.artist_separators", self.artist_sep_edit.text())
         self.config.set("music.kugou_db", self.kugou_db_edit.text().strip())
         self.config.set("logging.enabled", self.logging_enable.isChecked())
         # 立即生效：动态启停文件日志写入

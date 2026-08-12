@@ -66,7 +66,7 @@ class ConfigStore(JsonStore):
             "movie": "{title_orig} ({year}) - {title_user} - [{group} {resolution}]",
             "tv": "{title_orig} S{season_2d}E{episode_2d} {title_user} - [{group} {resolution}]",
         },
-        "music": {"inject_cover": True, "artist_separators": "",
+        "music": {"inject_cover": True, "artist_separators": ", ",
                    "kugou_db": ""},  # 酷狗 KGG 密钥数据库路径，留空自动检测
         "output": {
             "mode": "custom",  # custom | library
