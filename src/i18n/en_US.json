@@ -5,6 +5,8 @@
   "drop_hint": "Drop files or folders here",
   "remove_selected": "Remove Selected",
   "clear_list": "Clear List",
+  "filter_all": "All",
+  "btn_remove_list": "Remove from list",
   "process": "Process",
   "undo": "Undo",
   "cancel": "Cancel",

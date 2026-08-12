@@ -5,6 +5,8 @@
   "drop_hint": "拖拽文件或文件夹到这里",
   "remove_selected": "移除选中",
   "clear_list": "清空列表",
+  "filter_all": "全部",
+  "btn_remove_list": "移出列表",
   "process": "开始处理",
   "undo": "撤销",
   "cancel": "取消",

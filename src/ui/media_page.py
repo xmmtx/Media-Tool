@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QMessageBox,
     QSplitter,
     QStackedWidget,
@@ -229,6 +230,24 @@ class MediaPage(QWidget):
         self.drop_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.drop_stack.addWidget(self.drop_hint)
         self.drop_stack.addWidget(self.table)
+        # 文件列表工具栏：移出 / 清空 + 状态筛选
+        list_toolbar = QHBoxLayout()
+        self.btn_remove_list = PushButton(self)
+        self.btn_clear_list = PushButton(self)
+        self.btn_remove_list.clicked.connect(self._remove_selected)
+        self.btn_clear_list.clicked.connect(self._clear)
+        self.status_filter = ComboBox(self)
+        self.status_filter.currentIndexChanged.connect(self._apply_status_filter)
+        self._filter_codes = ["all", "pending", "ok", "manual", "error"]
+        for _code in self._filter_codes:
+            self.status_filter.addItem(
+                self._t("filter_all" if _code == "all" else "st_" + _code))
+        list_toolbar.addWidget(self.btn_remove_list)
+        list_toolbar.addWidget(self.btn_clear_list)
+        list_toolbar.addStretch()
+        list_toolbar.addWidget(self.status_filter)
+        card_lay.addLayout(list_toolbar)
+
         card_lay.addWidget(self.drop_stack, 1)
 
         self.drop_card.files_dropped.connect(self._on_files_dropped)
@@ -346,6 +365,11 @@ class MediaPage(QWidget):
         self.btn_auto_match.setText(self._t("btn_auto_match"))
         self.btn_process.setText(self._t("btn_execute"))
         self.btn_undo.setText(self._t("undo"))
+        self.btn_remove_list.setText(self._t("btn_remove_list"))
+        self.btn_clear_list.setText(self._t("clear_list"))
+        for _i, _code in enumerate(self._filter_codes):
+            self.status_filter.setItemText(
+                _i, self._t("filter_all" if _code == "all" else "st_" + _code))
         # 处理方式下拉保持选中项，仅重设文本
         idx = self.mode_op_combo.currentIndex()
         self.mode_op_combo.setItemText(0, self._t("mode_rename"))
@@ -357,15 +381,47 @@ class MediaPage(QWidget):
 
     # ── 文件列表 ──────────────────────────────────────────────────────────
 
+    def _set_name_cell(self, row: int, col: int, fullname: str) -> None:
+        """文件名单元格：正文不显示扩展名，扩展名作为橙色高亮标签放在末尾。"""
+        stem, ext = os.path.splitext(fullname or "")
+        w = QWidget(self.table)
+        lay = QHBoxLayout(w)
+        lay.setContentsMargins(8, 2, 8, 2)
+        lay.setSpacing(4)
+        name_lbl = QLabel(stem or fullname or "")
+        name_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        name_lbl.setStyleSheet("background: transparent; border: none;")
+        lay.addWidget(name_lbl, 1)
+        if ext:
+            ext_lbl = QLabel(ext)
+            ext_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            ext_lbl.setStyleSheet(
+                "color:#7A4E00;background:#FFC24B;border-radius:6px;"
+                "padding:1px 8px;font-weight:600;")
+            lay.addWidget(ext_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.table.setCellWidget(row, col, w)
+
+    def _apply_status_filter(self) -> None:
+        """按状态筛选表格行（全部 / 待处理 / 已匹配 / 人工 / 出错）。"""
+        idx = self.status_filter.currentIndex()
+        sel = self._filter_codes[idx] if 0 <= idx < len(self._filter_codes) else "all"
+        for row in range(self.table.rowCount()):
+            it = self.table.item(row, 2)
+            st = str(it.data(Qt.ItemDataRole.UserRole) or "pending") if it else "pending"
+            self.table.setRowHidden(row, bool(sel != "all" and st != sel))
+
     def _add_row(self, path: str) -> None:
         self._paths.append(path)
         logger.info("添加文件: %s", path)
         row = self.table.rowCount()
         self.table.insertRow(row)
-        self.table.setItem(row, 0, QTableWidgetItem(os.path.basename(path)))
+        base = os.path.basename(path)
+        self.table.setItem(row, 0, QTableWidgetItem(base))
         self.table.setItem(row, 1, QTableWidgetItem(""))
         self.table.setItem(row, 2, QTableWidgetItem(self._t("st_pending")))
         self.table.item(row, 0).setData(Qt.ItemDataRole.UserRole, path)
+        self.table.item(row, 2).setData(Qt.ItemDataRole.UserRole, "pending")
+        self._set_name_cell(row, 0, base)
         self.lbl_status.setText(self._t("status_ready", count=len(self._paths)))
         self._update_drop_hint()
 
@@ -585,13 +641,14 @@ class MediaPage(QWidget):
             row = self._paths.index(item.path)
         except ValueError:
             return
-        self.table.item(row, 1).setText(item.new_name)
+        self._set_name_cell(row, 1, item.new_name or "")
         status_item = self.table.item(row, 2)
         # 状态 + manual 原因均 i18n
         status_text = self._t("st_" + item.status)
         if item.status == "manual" and item.reason:
             status_text = f"{status_text}: {self._i18n_reason(item.reason)}"
         status_item.setText(status_text)
+        status_item.setData(Qt.ItemDataRole.UserRole, item.status)
         status_item.setToolTip(self._i18n_reason(item.reason) if item.reason else "")
         status_item.setForeground(
             Qt.GlobalColor.green if item.status == "ok"
