@@ -17,6 +17,7 @@ logger = logging.getLogger("ui.media_page")
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QButtonGroup,
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
@@ -37,6 +38,7 @@ from qfluentwidgets import (
     PrimaryPushButton,
     ProgressBar,
     PushButton,
+    RadioButton,
     StrongBodyLabel,
     SubtitleLabel,
     SwitchButton,
@@ -269,11 +271,22 @@ class MediaPage(QWidget):
         p.addWidget(self.fmt_edit)
 
         self.lbl_mode = StrongBodyLabel(self._t("process"))
-        self.mode_op_combo = ComboBox(self)
-        self.mode_op_combo.addItems(
-            [self._t("mode_rename"), self._t("mode_copy"), self._t("mode_hardlink")])
+        # 处理方式：横向单选按钮，选中项持久化到 config（重启记住）
+        self._mode_radios_order = ["rename", "copy", "hardlink"]
+        self.mode_group = QButtonGroup(self)
+        self.mode_group.setExclusive(True)
+        self.mode_radios: Dict[str, RadioButton] = {}
+        _saved_mode = str(self.config.get("process.mode", "rename") or "rename")
+        mode_row = QHBoxLayout()
+        for _m in self._mode_radios_order:
+            _rb = RadioButton(self)
+            _rb.setChecked(_m == _saved_mode)
+            _rb.toggled.connect(self._on_mode_changed)
+            self.mode_radios[_m] = _rb
+            self.mode_group.addButton(_rb)
+            mode_row.addWidget(_rb)
         p.addWidget(self.lbl_mode)
-        p.addWidget(self.mode_op_combo)
+        p.addLayout(mode_row)
 
         self.lbl_out = StrongBodyLabel(self._t("output_dir_label"))
         out_row = QHBoxLayout()
@@ -372,11 +385,9 @@ class MediaPage(QWidget):
             self.status_filter.setItemText(
                 _i, self._t("filter_all" if _code == "all" else "st_" + _code))
         # 处理方式下拉保持选中项，仅重设文本
-        idx = self.mode_op_combo.currentIndex()
-        self.mode_op_combo.setItemText(0, self._t("mode_rename"))
-        self.mode_op_combo.setItemText(1, self._t("mode_copy"))
-        self.mode_op_combo.setItemText(2, self._t("mode_hardlink"))
-        self.mode_op_combo.setCurrentIndex(max(0, idx))
+        self.mode_radios["rename"].setText(self._t("mode_rename"))
+        self.mode_radios["copy"].setText(self._t("mode_copy"))
+        self.mode_radios["hardlink"].setText(self._t("mode_hardlink"))
         self.table.setHorizontalHeaderLabels(
             [self._t("col_old_name"), self._t("col_new_name"), self._t("col_status")])
 
@@ -518,8 +529,22 @@ class MediaPage(QWidget):
 
     # ── 处理 ──────────────────────────────────────────────────────────────
 
+    def _current_mode(self) -> str:
+        """当前选中的处理方式（rename/copy/hardlink）。"""
+        for _m in self._mode_radios_order:
+            if self.mode_radios[_m].isChecked():
+                return _m
+        return str(self.config.get("process.mode", "rename") or "rename")
+
+    def _on_mode_changed(self, _checked: bool) -> None:
+        """处理方式切换时持久化，重启后记住上次选项。"""
+        for _m in self._mode_radios_order:
+            if self.mode_radios[_m].isChecked():
+                self.config.set("process.mode", _m)
+                break
+
     def _options(self) -> ProcessingOptions:
-        mode = ["rename", "copy", "hardlink"][self.mode_op_combo.currentIndex()]
+        mode = self._current_mode()
         output_mode = self.config.get("output.mode", "custom")
         roots = self.config.get("output.roots", {}) or {}
         return ProcessingOptions(

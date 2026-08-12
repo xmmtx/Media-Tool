@@ -180,7 +180,7 @@ class GroupsPage(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(
             1, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.ResizeToContents)
+            2, QHeaderView.ResizeMode.Stretch)  # 别名列拉伸填充剩余，消除右侧空白
         self.table.setBorderVisible(True)
         self.table.setBorderRadius(8)
         root.addWidget(self.table, 1)

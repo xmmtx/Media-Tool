@@ -115,5 +115,7 @@
   "reason_no_tv": "no TMDB TV match",
   "reason_tv_type": "cannot determine TV type (anime/drama/documentary)",
   "reason_missing_tags": "missing title/artist in metadata tags",
-  "reason_empty_name": "format produced empty name"  "reason_parse_subtitle": "cannot parse season/episode from subtitle",
-  "reason_no_video": "no matching video",}
+  "reason_empty_name": "format produced empty name",
+  "reason_parse_subtitle": "cannot parse season/episode from subtitle",
+  "reason_no_video": "no matching video"
+}

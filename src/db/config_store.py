@@ -73,6 +73,7 @@ class ConfigStore(JsonStore):
                       "tv_anime": "", "tv_drama": "", "tv_doc": ""},
         },
         "logging": {"enabled": True},
+        "process": {"mode": "rename"},  # 处理方式: rename | copy | hardlink
         "localize": {"engine": "opencc"},  # 简繁转换引擎: opencc | zhconv
     }
 

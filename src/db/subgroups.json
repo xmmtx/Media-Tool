@@ -79,14 +79,16 @@
       "rename_to": "TSDM",
       "aliases": [
         "TSDM字幕組",
-        "天使动漫"
+        "天使动漫",
+        "天使动漫字幕组"
       ],
       "added": "2026-08-10"
     },
     "极影字幕社": {
       "rename_to": "极影",
       "aliases": [
-        "极影字幕·毁片党"
+        "极影字幕·毁片党",
+        "KT310"
       ],
       "added": "2026-08-10"
     },
@@ -121,7 +123,9 @@
       "rename_to": "雪飄",
       "aliases": [
         "雪飘工作室",
-        "FLsnow"
+        "FLsnow",
+        "FLNOW",
+        "Yukon"
       ],
       "added": "2026-08-10"
     },
@@ -184,6 +188,278 @@
     "DBD-Raws": {
       "rename_to": "DBD",
       "aliases": [],
+      "added": "2026-08-12"
+    },
+    "动漫花园字幕组": {
+      "rename_to": "动漫花园",
+      "aliases": [
+        "DMHY"
+      ],
+      "added": "2026-08-12"
+    },
+    "澄空学园": {
+      "rename_to": "澄空",
+      "aliases": [
+        "Sumisora",
+        "SKY"
+      ],
+      "added": "2026-08-12"
+    },
+    "诸神字幕组": {
+      "rename_to": "诸神",
+      "aliases": [
+        "Kamigami",
+        "諸神字幕組"
+      ],
+      "added": "2026-08-12"
+    },
+    "幻樱字幕组": {
+      "rename_to": "幻樱",
+      "aliases": [
+        "HYSub",
+        "Huanying",
+        "幻櫻字幕組"
+      ],
+      "added": "2026-08-12"
+    },
+    "Airota-Raws": {
+      "rename_to": "Airota-Raws",
+      "aliases": [
+        "千夏压制",
+        "千夏壓制"
+      ],
+      "added": "2026-08-12"
+    },
+    "千夏字幕组": {
+      "rename_to": "千夏",
+      "aliases": [
+        "Airota",
+        "千夏字幕組"
+      ],
+      "added": "2026-08-12"
+    },
+    "悠哈璃羽字幕社": {
+      "rename_to": "悠哈璃羽",
+      "aliases": [
+        "UHA-WINGS"
+      ],
+      "added": "2026-08-12"
+    },
+    "动新字幕组": {
+      "rename_to": "动新",
+      "aliases": [
+        "DXSub"
+      ],
+      "added": "2026-08-12"
+    },
+    "极影压制组": {
+      "rename_to": "JiYing",
+      "aliases": [
+        "极影压制"
+      ],
+      "added": "2026-08-12"
+    },
+    "Nekomoe-Raws": {
+      "rename_to": "Nekomoe-Raws",
+      "aliases": [
+        "喵萌压制"
+      ],
+      "added": "2026-08-12"
+    },
+    "Lilith-Raws": {
+      "rename_to": "Lilith",
+      "aliases": [],
+      "added": "2026-08-12"
+    },
+    "Erai-raws": {
+      "rename_to": "Erai",
+      "aliases": [],
+      "added": "2026-08-12"
+    },
+    "SubsPlease": {
+      "rename_to": "SubsPlease",
+      "aliases": [],
+      "added": "2026-08-12"
+    },
+    "人人影视": {
+      "rename_to": "YYeTs",
+      "aliases": [
+        "人人影視",
+        "YYeTs字幕组"
+      ],
+      "added": "2026-08-12"
+    },
+    "伊甸园字幕组": {
+      "rename_to": "伊甸园",
+      "aliases": [
+        "YDY"
+      ],
+      "added": "2026-08-12"
+    },
+    "风软字幕组": {
+      "rename_to": "风软",
+      "aliases": [
+        "FRDS",
+        "风軟字幕組"
+      ],
+      "added": "2026-08-12"
+    },
+    "破烂熊字幕组": {
+      "rename_to": "破烂熊",
+      "aliases": [
+        "PLX"
+      ],
+      "added": "2026-08-12"
+    },
+    "柚子木字幕组": {
+      "rename_to": "柚子木",
+      "aliases": [
+        "Youzimu"
+      ],
+      "added": "2026-08-12"
+    },
+    "深影字幕组": {
+      "rename_to": "深影",
+      "aliases": [
+        "DeepSub",
+        "DeepMovie"
+      ],
+      "added": "2026-08-12"
+    },
+    "远鉴字幕组": {
+      "rename_to": "远鉴",
+      "aliases": [
+        "Visionary"
+      ],
+      "added": "2026-08-12"
+    },
+    "FIX字幕侠": {
+      "rename_to": "FIX",
+      "aliases": [
+        "FIX字幕组"
+      ],
+      "added": "2026-08-12"
+    },
+    "天之圣杯字幕组": {
+      "rename_to": "天之圣杯",
+      "aliases": [
+        "HolyGrail"
+      ],
+      "added": "2026-08-12"
+    },
+    "追新番字幕组": {
+      "rename_to": "追新番",
+      "aliases": [
+        "SubPigg",
+        "ZXE",
+        "猪猪日剧"
+      ],
+      "added": "2026-08-12"
+    },
+    "日联字幕组": {
+      "rename_to": "日联",
+      "aliases": [
+        "JPops"
+      ],
+      "added": "2026-08-12"
+    },
+    "CMCT": {
+      "rename_to": "CMCT",
+      "aliases": [
+        "CMCT压制组"
+      ],
+      "added": "2026-08-12"
+    },
+    "CHD联盟": {
+      "rename_to": "CHD",
+      "aliases": [
+        "CHDBits"
+      ],
+      "added": "2026-08-12"
+    },
+    "思路压制组": {
+      "rename_to": "思路",
+      "aliases": [
+        "SILU",
+        "MySilu"
+      ],
+      "added": "2026-08-12"
+    },
+    "HDChina": {
+      "rename_to": "HDChina",
+      "aliases": [
+        "高清中国",
+        "HDC"
+      ],
+      "added": "2026-08-12"
+    },
+    "圣城家园": {
+      "rename_to": "圣城",
+      "aliases": [
+        "SCG"
+      ],
+      "added": "2026-08-12"
+    },
+    "影视帝国": {
+      "rename_to": "影视帝国",
+      "aliases": [
+        "Empire"
+      ],
+      "added": "2026-08-12"
+    },
+    "阳光电影": {
+      "rename_to": "阳光",
+      "aliases": [
+        "飘花"
+      ],
+      "added": "2026-08-12"
+    },
+    "YIFY": {
+      "rename_to": "YIFY",
+      "aliases": [
+        "YTS"
+      ],
+      "added": "2026-08-12"
+    },
+    "RARBG": {
+      "rename_to": "RARBG",
+      "aliases": [],
+      "added": "2026-08-12"
+    },
+    "DON": {
+      "rename_to": "DON",
+      "aliases": [],
+      "added": "2026-08-12"
+    },
+    "CtrlHD": {
+      "rename_to": "CtrlHD",
+      "aliases": [],
+      "added": "2026-08-12"
+    },
+    "WiKi": {
+      "rename_to": "WiKi",
+      "aliases": [
+        "HDWings"
+      ],
+      "added": "2026-08-12"
+    },
+    "QxR": {
+      "rename_to": "QxR",
+      "aliases": [],
+      "added": "2026-08-12"
+    },
+    "PSA": {
+      "rename_to": "PSA",
+      "aliases": [
+        "UtotV"
+      ],
+      "added": "2026-08-12"
+    },
+    "FLUX": {
+      "rename_to": "FLUX",
+      "aliases": [
+        "NTb"
+      ],
       "added": "2026-08-12"
     }
   }
