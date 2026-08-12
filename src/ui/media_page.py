@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import bisect
 import logging
 import os
 from typing import Dict, List, Optional
@@ -382,18 +383,29 @@ class MediaPage(QWidget):
     # ── 文件列表 ──────────────────────────────────────────────────────────
 
     def _set_name_cell(self, row: int, col: int, fullname: str) -> None:
-        """文件名单元格：正文不显示扩展名，扩展名作为橙色高亮标签放在末尾。"""
-        stem, ext = os.path.splitext(fullname or "")
+        """文件名单元格：正文不显示扩展名，扩展名作橙色高亮标签（无小数点）放在末尾。
+
+        item 文本只存去后缀的 stem（与 widget 一致，避免重影）；tooltip 存完整名
+        供悬停预览；UserRole 数据由调用方另行设置。
+        """
+        fullname = fullname or ""
+        stem, ext = os.path.splitext(fullname)
+        it = self.table.item(row, col)
+        if it is None:
+            it = QTableWidgetItem()
+            self.table.setItem(row, col, it)
+        it.setText(stem or fullname)
+        it.setToolTip(fullname)
         w = QWidget(self.table)
         lay = QHBoxLayout(w)
         lay.setContentsMargins(8, 2, 8, 2)
         lay.setSpacing(4)
-        name_lbl = QLabel(stem or fullname or "")
+        name_lbl = QLabel(stem or fullname)
         name_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         name_lbl.setStyleSheet("background: transparent; border: none;")
         lay.addWidget(name_lbl, 1)
         if ext:
-            ext_lbl = QLabel(ext)
+            ext_lbl = QLabel(ext.lstrip("."))
             ext_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             ext_lbl.setStyleSheet(
                 "color:#7A4E00;background:#FFC24B;border-radius:6px;"
@@ -411,17 +423,19 @@ class MediaPage(QWidget):
             self.table.setRowHidden(row, bool(sel != "all" and st != sel))
 
     def _add_row(self, path: str) -> None:
-        self._paths.append(path)
-        logger.info("添加文件: %s", path)
-        row = self.table.rowCount()
-        self.table.insertRow(row)
         base = os.path.basename(path)
-        self.table.setItem(row, 0, QTableWidgetItem(base))
-        self.table.setItem(row, 1, QTableWidgetItem(""))
-        self.table.setItem(row, 2, QTableWidgetItem(self._t("st_pending")))
-        self.table.item(row, 0).setData(Qt.ItemDataRole.UserRole, path)
-        self.table.item(row, 2).setData(Qt.ItemDataRole.UserRole, "pending")
-        self._set_name_cell(row, 0, base)
+        # 按名称（大小写不敏感）插入有序位置，_paths 与表格行始终保持一致
+        pos = bisect.bisect_left(
+            self._paths, base.lower(),
+            key=lambda p: os.path.basename(p).lower())
+        self._paths.insert(pos, path)
+        logger.info("添加文件: %s", path)
+        self.table.insertRow(pos)
+        self._set_name_cell(pos, 0, base)
+        self.table.item(pos, 0).setData(Qt.ItemDataRole.UserRole, path)
+        self.table.setItem(pos, 1, QTableWidgetItem(""))
+        self.table.setItem(pos, 2, QTableWidgetItem(self._t("st_pending")))
+        self.table.item(pos, 2).setData(Qt.ItemDataRole.UserRole, "pending")
         self.lbl_status.setText(self._t("status_ready", count=len(self._paths)))
         self._update_drop_hint()
 
