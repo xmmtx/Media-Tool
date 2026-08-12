@@ -66,6 +66,10 @@ from .metadata.music_tags import (
     split_artists,
     update_music_tags,
 )
+from .metadata.music_unlock import KUGOU_EXTS, UnlockError, decrypt_kugou
+
+# 酷狗加密音频（.kgm/.vpr/.kgg）纳入媒体收集，_process_music 会先解密
+AUDIO_EXTS |= KUGOU_EXTS
 from .providers import LlmSubgroupProvider, MediaMatch, TMDBProvider
 
 # Windows 非法文件名字符（含控制符）
@@ -404,6 +408,17 @@ class Processor:
     def _process_music(self, item, options) -> QueueItem:
         needed = required_fields(options.format)
         is_library = options.output_mode == "library"
+        # 酷狗加密音频：先解密（输出回原目录，成功后删加密源），再读标签
+        if os.path.splitext(item.path)[1].lower() in KUGOU_EXTS:
+            try:
+                decrypted = decrypt_kugou(
+                    item.path, self.config.get("music.kugou_db", ""))
+            except UnlockError as e:
+                logger.error("酷狗解密失败 %s: %s", item.path, e)
+                return self._to_manual(item, str(e))
+            if not decrypted:
+                return self._to_manual(item, "酷狗解密未生成输出文件")
+            item.path = decrypted[0]
         tags = read_music_tags(item.path)
         title = (tags.get("title") or [""])[0].strip()
         artists = split_artists(tags.get("artist"),

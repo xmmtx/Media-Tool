@@ -204,6 +204,19 @@ class SettingsPage(QWidget):
         lay.addWidget(self.lbl_artist_sep)
         lay.addWidget(self.artist_sep_edit)
 
+        self.lbl_kugou_db = StrongBodyLabel(self._t("settings_kugou_db"))
+        kugou_row = QHBoxLayout()
+        self.kugou_db_edit = LineEdit(self)
+        self.kugou_db_edit.setPlaceholderText(self._t("settings_kugou_db_hint"))
+        self.kugou_db_edit.textChanged.connect(self._mark_dirty)
+        btn_kugou_db = PushButton(self)
+        btn_kugou_db.setText("…")
+        btn_kugou_db.clicked.connect(self._choose_kugou_db)
+        kugou_row.addWidget(self.kugou_db_edit, 1)
+        kugou_row.addWidget(btn_kugou_db)
+        lay.addWidget(self.lbl_kugou_db)
+        lay.addLayout(kugou_row)
+
         # ── 日志 ──────────────────────────────────────────────────
         self.logging_enable = SwitchButton(self._t("settings_logging_enable"), self)
         self.logging_enable.checkedChanged.connect(self._mark_dirty)
@@ -251,6 +264,8 @@ class SettingsPage(QWidget):
         for code in ("movie", "tv_anime", "tv_drama", "tv_doc", "music"):
             self.root_labels[code].setText(self._t("output_root_" + code))
         self.lbl_artist_sep.setText(self._t("artist_separator_label"))
+        self.lbl_kugou_db.setText(self._t("settings_kugou_db"))
+        self.kugou_db_edit.setPlaceholderText(self._t("settings_kugou_db_hint"))
         self.logging_enable.setText(self._t("settings_logging_enable"))
         self.lbl_convert_engine.setText(self._t("settings_convert_engine"))
         # 语言下拉：更新"跟随系统"文案并保持选中
@@ -312,6 +327,15 @@ class SettingsPage(QWidget):
             self.root_edits[code].setText(folder)
             self._mark_dirty()
 
+    def _choose_kugou_db(self) -> None:
+        """选择酷狗密钥数据库（KGMusicV3.db）。"""
+        path, _ = QFileDialog.getOpenFileName(
+            self, self._t("settings_kugou_db"), "",
+            "Kugou DB (*.db);;All Files (*)")
+        if path:
+            self.kugou_db_edit.setText(path)
+            self._mark_dirty()
+
     # ── 快照 / 改动检测 / 保存 / 取消 ────────────────────────────────────
 
     def _snapshot(self) -> Dict:
@@ -332,6 +356,7 @@ class SettingsPage(QWidget):
             "output.roots.tv_doc": (self.config.get("output.roots", {}) or {}).get("tv_doc", ""),
             "output.roots.music": (self.config.get("output.roots", {}) or {}).get("music", ""),
             "music.artist_separators": self.config.get("music.artist_separators", ""),
+            "music.kugou_db": self.config.get("music.kugou_db", ""),
             "logging.enabled": bool(self.config.get("logging.enabled", True)),
             "localize.engine": self.config.get("localize.engine", "opencc"),
         }
@@ -355,6 +380,7 @@ class SettingsPage(QWidget):
             "output.roots.tv_doc": self.root_edits["tv_doc"].text().strip(),
             "output.roots.music": self.root_edits["music"].text().strip(),
             "music.artist_separators": self.artist_sep_edit.text().strip(),
+            "music.kugou_db": self.kugou_db_edit.text().strip(),
             "logging.enabled": self.logging_enable.isChecked(),
             "localize.engine": self.convert_engine_combo.currentData() or "opencc",
         }
@@ -417,6 +443,9 @@ class SettingsPage(QWidget):
         self.artist_sep_edit.blockSignals(True)
         self.artist_sep_edit.setText(self.config.get("music.artist_separators", ""))
         self.artist_sep_edit.blockSignals(False)
+        self.kugou_db_edit.blockSignals(True)
+        self.kugou_db_edit.setText(self.config.get("music.kugou_db", ""))
+        self.kugou_db_edit.blockSignals(False)
         self.logging_enable.blockSignals(True)
         self.logging_enable.setChecked(bool(self.config.get("logging.enabled", True)))
         self.logging_enable.blockSignals(False)
@@ -453,6 +482,7 @@ class SettingsPage(QWidget):
         self.config.set("output.mode", self.output_mode_combo.currentData() or "custom")
         self.config.set("output.roots", roots)
         self.config.set("music.artist_separators", self.artist_sep_edit.text().strip())
+        self.config.set("music.kugou_db", self.kugou_db_edit.text().strip())
         self.config.set("logging.enabled", self.logging_enable.isChecked())
         # 立即生效：动态启停文件日志写入
         from logging_setup import set_logging_enabled

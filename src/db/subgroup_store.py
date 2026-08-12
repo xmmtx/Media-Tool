@@ -27,6 +27,7 @@ import logging
 import re
 import shutil
 import sys
+import unicodedata
 from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -41,6 +42,29 @@ def normalize(name: str) -> str:
     """归一化组名：小写并去除标点/空格/下划线等非字母数字字符（保留中文），
     用于模糊匹配。"""
     return re.sub(r"[\W_]+", "", name.lower())
+
+
+def _soft_normalize(text: str) -> str:
+    """轻归一化：转小写、全角转半角、非字母数字/中文字符统一替换为 ``-``，
+    保留分隔边界。供「边界感知」的子串匹配使用，避免短 tag（如 SKY、DON）
+    命中普通单词（如 Skyfall、Don't Look Up）。
+
+    撇号（``'``）视为词内字符直接删除（缩写 ``Don't`` 不应被当成 `don` 边界词），
+    其余标点/空格才替换为 ``-`` 分隔符。"""
+    text = unicodedata.normalize("NFKC", text)
+    text = text.replace("'", "")
+    text = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "-", text)
+    return text.strip("-").lower()
+
+
+def _word_pattern(cand: str) -> Optional[re.Pattern]:
+    """为纯英文/数字候选名构造边界感知正则：候选名两侧不允许紧邻字母/数字，
+    使 ``[SKY]`` 命中而 ``Skyfall`` 不命中；连字符候选（如 ``Airota-Raws``）
+    也按原样保留连字符参与匹配。"""
+    core = _soft_normalize(cand)
+    if not core:
+        return None
+    return re.compile(r"(?<![0-9a-zA-Z])" + re.escape(core) + r"(?![0-9a-zA-Z])")
 
 
 class SubgroupStore(JsonStore):
@@ -82,15 +106,21 @@ class SubgroupStore(JsonStore):
         """在 ``text`` 中查找可被识别的名称（``aliases`` + 主键 + ``rename_to``），
         返回内部主键；未命中返回 ``None``。
 
-        既支持整段完全匹配，也支持作为较长文本的子串出现（如
-        ``[NekomoeKissaten 1920x1080]``），以去除标点/括号后的归一化文本做匹配，
-        避免因分隔符差异而漏判。
+        匹配分两档：
+        - 整段完全匹配：``text`` 去掉标点后与候选名一致。
+        - 子串匹配（候选名 >= 3 字符）：
+          * 纯英文/数字候选（如 SKY、DON、Airota-Raws）用「边界感知」匹配——
+            要求候选名两侧不是字母/数字，因此 ``[SKY]``、``[DON]`` 能命中，
+            但普通单词 ``Skyfall``、``Don't Look Up`` 不会误命中；同时
+            ``Airota-Raws`` 也天然优先于 ``Airota``（不再依赖存储顺序）。
+          * 含中文的候选维持宽松子串匹配（中文词组误命中率低）。
         """
         if not text:
             return None
         n_text = normalize(text)
         if not n_text:
             return None
+        soft_text = _soft_normalize(text)
         for key, meta in self.data["groups"].items():
             rename_to = meta.get("rename_to") or key
             candidates = [key, rename_to, *meta.get("aliases", [])]
@@ -101,7 +131,15 @@ class SubgroupStore(JsonStore):
                 if n_cand == n_text:
                     return key
                 # 名称至少 3 个字符才做子串匹配，避免过短的名称误命中
-                if len(n_cand) >= 3 and n_cand in n_text:
+                if len(n_cand) < 3:
+                    continue
+                if n_cand.isascii():
+                    # 纯英文/数字 tag：边界感知匹配
+                    pat = _word_pattern(cand)
+                    if pat and pat.search(soft_text):
+                        return key
+                elif n_cand in n_text:
+                    # 含中文候选：宽松子串匹配
                     return key
         return None
 

@@ -104,6 +104,24 @@ jobs:
             Write-Host "::warning::ffprobe not found - resolution probing disabled"
           }
 
+      # 酷狗音乐解锁工具（um.exe）：unlock-music 官方 Go CLI，与 ffprobe 一样
+      # 随包分发（frozen 时 music_unlock 从 exe 同目录加载 um.exe）。从项目
+      # Gitea 的 Release 下载（zip 内为单个 um.exe），固定 v0.2.19 避免上游变动。
+      # 放 onedir 根目录后，Inno Setup [Files]（..\dist\MediaTool\*）与 portable
+      # zip 都会自动包含。
+      - name: Bundle um.exe (Kugou music unlock)
+        shell: pwsh
+        run: |
+          $url = "https://git.um-react.app/um/cli/releases/download/v0.2.19/um-windows-amd64-v0.2.19.zip"
+          $zip = "$env:TEMP\um.zip"
+          Invoke-WebRequest $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:TEMP\um" -Force
+          $exe = Get-ChildItem "$env:TEMP\um" -Filter "um.exe" -Recurse | Select-Object -First 1
+          if (-not $exe) { throw "um.exe not found in downloaded archive" }
+          Copy-Item $exe.FullName -Destination "dist\MediaTool\um.exe" -Force
+          if (-not (Test-Path "dist\MediaTool\um.exe")) { throw "um.exe bundle failed" }
+          Write-Host "um.exe bundled"
+
       # 版本：tag push 时 GITHUB_REF_NAME = "v1.2.3" → "1.2.3";
       # 普通 push 无版本 tag → 用 0.0.<run_number> 保证 Inno 拿到合法 X.Y.Z。
       # 不调用 git describe（无 tag 时退出码非零会把步骤标红失败）。
