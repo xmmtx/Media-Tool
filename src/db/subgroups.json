@@ -461,6 +461,11 @@
         "NTb"
       ],
       "added": "2026-08-12"
+    },
+    "Tigole": {
+      "rename_to": "Tigole",
+      "aliases": [],
+      "added": "2026-08-15"
     }
   }
 }

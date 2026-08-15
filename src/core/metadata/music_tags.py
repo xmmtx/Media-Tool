@@ -66,16 +66,19 @@ def split_artists(text: Union[str, List[str], None],
                   separators: Optional[str] = None) -> List[str]:
     """拆分多艺术家字符串。
 
-    默认分隔符为中文顿号（``、``）、全/半角逗号（``,``/``，``）、
-    斜杠（``/``）及分号（``;``/``；``）；传入 ``separators``（字符集合，
-    如 ``"、,，"``）时改用自定义分隔符。``&``/``和``/``与`` 不拆分
+    常用分隔符恒保留：中文顿号（``、``）、全/半角逗号（``,``/``，``）、
+    斜杠（``/``）及分号（``;``/``；``）；传入 ``separators``（如 ``", "``）
+    时是在此基础上**追加**分隔符，而非替换——避免只配置 ", " 后顿号拆不动。
+    空白不视为分隔符（避免把 "Ed Sheeran" 拆开）。``&``/``和``/``与`` 不拆分
     （通常是乐队名的一部分）。去重、去空白。
     """
     if text is None:
         return []
+    # 常用分隔符恒保留；separators 里的非空白字符作为额外分隔符追加
+    default_chars = "、,，/;；"
     if separators:
-        # 空白不视为分隔符（避免把 "Ed Sheeran" 拆开）；", " 按逗号即可
         chars = [c for c in separators if not c.isspace()]
+        chars = list(dict.fromkeys([*chars, *default_chars]))
         pattern = "[" + "".join(re.escape(c) for c in chars) + "]"
     else:
         pattern = r"[、,，/;；]"

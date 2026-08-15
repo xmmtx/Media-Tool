@@ -70,6 +70,57 @@ def _detect_extras(info: "MediaInfo", name: str) -> None:
             return
 
 
+def _detect_extras_from_path(info: "MediaInfo", path: str) -> None:
+    """按路径中的特典子文件夹识别 extras（Jellyfin 约定）。
+
+    如 ``Movie (2003)/Featurettes/Outtakes.mkv`` → ``featurettes``；
+    文件名不含特典关键词（如 ``Outtakes Reel.mkv``）时也能靠文件夹判断。
+    从文件所在目录逐级向上，取最近的匹配目录；已有文件名识别结果则跳过。
+    """
+    if (info.extra or {}).get("extras"):
+        return
+    d = os.path.dirname(path)
+    while d:
+        parent = os.path.basename(d).strip()
+        if parent:
+            label = _EXTRAS_FOLDER_TYPES.get(
+                re.sub(r"[\s_\-]+", "", parent.lower()))
+            if label:
+                info.extra["extras"] = label
+                info.extra["extras_frag"] = parent
+                return
+        up = os.path.dirname(d)
+        if up == d:
+            break
+        d = up
+
+
+# Jellyfin 特典子文件夹名（小写、去空格/连字符）→ extras 类型；不在列表的归入 extras
+_EXTRAS_FOLDER_TYPES = {
+    "behindthescenes": "behind the scenes",
+    "deletedscenes": "deleted scenes",
+    "interviews": "interviews",
+    "interview": "interviews",
+    "scenes": "scenes",
+    "scene": "scenes",
+    "samples": "samples",
+    "sample": "samples",
+    "shorts": "shorts",
+    "short": "shorts",
+    "featurettes": "featurettes",
+    "featurette": "featurettes",
+    "clips": "clips",
+    "clip": "clips",
+    "extras": "extras",
+    "extra": "extras",
+    "other": "extras",
+    "trailers": "trailers",
+    "trailer": "trailers",
+    "thememusic": "extras",
+    "backdrops": "extras",
+}
+
+
 # 已知 extras 类型，供外部校验
 EXTRAS_TYPES = tuple(label for _pat, label in _EXTRAS_PATTERNS)
 
@@ -324,11 +375,13 @@ def extract_from_filename(name: str) -> MediaInfo:
     info = _anitopy_parse(base_name)
     if info and info.title:
         _detect_extras(info, base_name)
+        _detect_extras_from_path(info, name)
         return info
     info = _regex_parse(base_name, base_name)
     if info.title:
         info.title_source = "regex"
         _detect_extras(info, base_name)
+        _detect_extras_from_path(info, name)
         return info
     ptn = _load_ptn()
     if ptn is not None:
@@ -345,10 +398,12 @@ def extract_from_filename(name: str) -> MediaInfo:
                 info.quality = str(parts["quality"]) if parts.get("quality") else None
                 info.codec = str(parts["codec"]) if parts.get("codec") else None
                 _detect_extras(info, base_name)
+                _detect_extras_from_path(info, name)
                 return info
         except Exception:
             pass  # PTN 解析失败时保留正则结果
     _detect_extras(info, base_name)
+    _detect_extras_from_path(info, name)
     return info
 
 

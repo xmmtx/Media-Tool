@@ -335,10 +335,10 @@ class MediaPage(QWidget):
         mb.addWidget(self.lbl_match)
         mb.addLayout(match_row)
         p.addWidget(self.match_box)
-        # 匹配框：TV 显示手动+自动；音乐仅自动匹配（解密+预览新名）；电影不显示
-        self.match_box.setVisible(self.kind in ("tv", "music"))
-        self.btn_manual_match.setVisible(self.kind == "tv")
-        self.lbl_match.setVisible(self.kind == "tv")
+        # 匹配框：TV/电影 显示手动+自动；音乐仅自动匹配（解密+预览新名）
+        self.match_box.setVisible(self.kind in ("tv", "movie", "music"))
+        self.btn_manual_match.setVisible(self.kind != "music")
+        self.lbl_match.setVisible(self.kind != "music")
 
         self.btn_process = PrimaryPushButton(self)
         self.btn_process.clicked.connect(self._execute_pending)
@@ -577,7 +577,7 @@ class MediaPage(QWidget):
         self._start_match()
 
     def _on_manual_match(self) -> None:
-        """手动匹配：搜索节目 → 多选集 → 发送到节目页匹配。"""
+        """手动匹配：电影用 TMDB 搜索对话框，TV 用多选集对话框。"""
         if not self._paths:
             QMessageBox.information(self, self._t("err_title"), self._t("err_no_files"))
             return
@@ -587,11 +587,17 @@ class MediaPage(QWidget):
             if info.title:
                 query = info.title
                 break
-        dlg = EpisodeMatchDialog(self.processor.tmdb, query,
-                                 self.i18n.lang, self.i18n, parent=self)
-        if dlg.exec() and dlg.selected_episodes:
-            self._apply_episode_match(dlg.selected_show, dlg.selected_episodes,
-                                      list(self._paths))
+        if self.kind == "tv":
+            dlg = EpisodeMatchDialog(self.processor.tmdb, query,
+                                     self.i18n.lang, self.i18n, parent=self)
+            if dlg.exec() and dlg.selected_episodes:
+                self._apply_episode_match(dlg.selected_show, dlg.selected_episodes,
+                                          list(self._paths))
+        else:  # movie
+            dlg = ManualMatchDialog(self.processor.tmdb, query, "movie",
+                                    self.i18n.lang, parent=self)
+            if dlg.exec() and dlg.selected:
+                self._apply_movie_match(dlg.selected, list(self._paths))
 
     def _open_manual_match_for_manual_items(self) -> None:
         """自动匹配失败后：打开手动匹配，仅处理 manual 队列中的项。"""
@@ -604,10 +610,33 @@ class MediaPage(QWidget):
             if info.title:
                 query = info.title
                 break
-        dlg = EpisodeMatchDialog(self.processor.tmdb, query,
-                                 self.i18n.lang, self.i18n, parent=self)
-        if dlg.exec() and dlg.selected_episodes:
-            self._apply_episode_match(dlg.selected_show, dlg.selected_episodes, targets)
+        if self.kind == "tv":
+            dlg = EpisodeMatchDialog(self.processor.tmdb, query,
+                                     self.i18n.lang, self.i18n, parent=self)
+            if dlg.exec() and dlg.selected_episodes:
+                self._apply_episode_match(dlg.selected_show, dlg.selected_episodes,
+                                          targets)
+        else:  # movie
+            dlg = ManualMatchDialog(self.processor.tmdb, query, "movie",
+                                    self.i18n.lang, parent=self)
+            if dlg.exec() and dlg.selected:
+                self._apply_movie_match(dlg.selected, targets)
+
+    def _apply_movie_match(self, match, paths) -> None:
+        """按选中的电影匹配应用到文件（dry_run，待用户点执行）。"""
+        logger.info("手动匹配: 电影=%s", match.title_orig if match else "")
+        options = self._options()
+        options.dry_run = True
+        self._phase = "match"
+        matched = 0
+        for path in list(paths):
+            item = self.processor.process_file(path, options, forced_match=match)
+            self._on_item_done(item)
+            if item.status == "ok":
+                self._manual_map.pop(path, None)
+            matched += 1
+        self.btn_process.setEnabled(bool(self._pending))
+        self.lbl_status.setText(self._t("manual_matched", count=matched))
 
     def _apply_episode_match(self, show, episodes, paths) -> None:
         """按 (season, episode) 把选中的集匹配到文件（dry_run，待用户点执行）。"""

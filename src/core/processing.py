@@ -44,8 +44,10 @@ _SUBTITLE_LANG_NORM = {
 
 try:
     from ..db import ConfigStore, ManualQueueStore, SubgroupStore  # src 作为顶层包运行时
+    from ..db.subgroup_store import normalize as _norm_group_name
 except ImportError:  # src 作为 sys.path 根运行时
     from db import ConfigStore, ManualQueueStore, SubgroupStore  # type: ignore
+    from db.subgroup_store import normalize as _norm_group_name  # type: ignore
 from .extractors.media_extractor import (
     MediaInfo,
     extract_from_filename,
@@ -284,10 +286,14 @@ class Processor:
         info = extract_from_filename(item.path)
         item.info = info
         logger.info("文件名解析: title=%s year=%s", info.title, info.year)
+        # 特典文件（Featurettes/Behind the Scenes 等子文件夹）：不当作正片电影
+        if (info.extra or {}).get("extras"):
+            return self._process_extras(item, options)
 
         group = forced_group
         if ("group" in needed or is_library) and not group:
-            group = self.resolve_subgroup(item.path, info.group)
+            groups = self.resolve_subgroups(item.path, info.group)
+            group = "&".join(groups) if groups else None
             item.group = group
             if not group:
                 return self._to_manual(item, "subgroup not recognized")
@@ -338,7 +344,10 @@ class Processor:
             values = dict(forced_values)
             logger.info("手动匹配预填值: %s", values)
             if "group" in needed or is_library:
-                group = forced_group or self.resolve_subgroup(item.path, info.group)
+                group = forced_group
+                if not group:
+                    groups = self.resolve_subgroups(item.path, info.group)
+                    group = "&".join(groups) if groups else None
                 item.group = group
                 if group:
                     values["group"] = group
@@ -356,7 +365,8 @@ class Processor:
 
         group = forced_group
         if ("group" in needed or is_library) and not group:
-            group = self.resolve_subgroup(item.path, info.group)
+            groups = self.resolve_subgroups(item.path, info.group)
+            group = "&".join(groups) if groups else None
             item.group = group
             if not group:
                 return self._to_manual(item, "subgroup not recognized")
@@ -530,6 +540,36 @@ class Processor:
         logger.info("TMDB 搜索(特典) %s: 0 个候选", info.title)
         return None
 
+    def _movie_extras_match(self, item, options) -> Optional[MediaMatch]:
+        """电影特典：主片信息从路径上级文件夹解析（文件名通常不含片名）。
+
+        从文件所在目录逐级向上，取第一个能解析出标题的目录作为主片文件夹
+        （特典目录如 Featurettes 解析不出标题，自然跳过）。"""
+        d = os.path.dirname(os.path.abspath(item.path))
+        info = None
+        while True:
+            parent = os.path.basename(d).strip()
+            if parent:
+                info = extract_from_filename(parent)
+                if info and info.title:
+                    break
+            up = os.path.dirname(d)
+            if up == d:
+                info = None
+                break
+            d = up
+        if not info or not info.title:
+            logger.warning("电影特典找不到主片文件夹: %s", item.path)
+            return None
+        logger.info("电影特典主片(文件夹): %s (%s)", info.title, info.year)
+        matches = self.tmdb.search(info.title, year=info.year,
+                                   media_type="movie",
+                                   language=tmdb_lang(options.language))
+        if matches:
+            logger.info("TMDB 搜索(电影特典) %s: %d 个候选", info.title, len(matches))
+            return self._pick_match(matches, info.year)
+        return None
+
     def _extras_parts(self, info: MediaInfo) -> tuple:
         """特典命名三要素 ``(frag, seq, name)``：类型词 / 原序号(或 None) / 名字(或 None)。
 
@@ -604,29 +644,40 @@ class Processor:
         """
         info = item.info
         extras_type = str((info.extra or {}).get("extras") or "Other")
-        logger.info("特典识别: %s (%s)", info.title, extras_type)
-        match = self._tmdb_tv_match(info, options)
+        logger.info("特典识别: %s (%s) kind=%s", info.title, extras_type, item.kind)
+        # 主片匹配：TV 特典用文件名标题搜剧集；电影特典从上级文件夹解析主片后搜电影
+        if item.kind == "movie":
+            match = self._movie_extras_match(item, options)
+        else:
+            match = self._tmdb_tv_match(info, options)
         if match is None:
-            return self._to_manual(item, "no TMDB TV match")
+            return self._to_manual(item, "no TMDB match for extras")
         item.match = match
 
         dst = None
         if options.output_mode == "library" and options.library_roots:
-            tv_type = classify_tv_type(match.genres)
-            root = options.library_roots.get(f"tv_{tv_type}") if tv_type else None
-            if root:
-                title = sanitize_filename(match.title_orig)
-                year = match.year
-                folder = f"{title} ({year})" if year else title
-                folder_path = os.path.join(root, folder, extras_type)
-                ext = os.path.splitext(item.path)[1]
-                frag, seq, name = self._extras_parts(info)
-                n = seq if seq else self._next_extras_number(folder_path, frag)
-                new_name = f"{frag} {n:02d}"
-                if name:
-                    new_name += f" {name}"
-                new_name += ext
-                dst = os.path.join(folder_path, new_name)
+            title = sanitize_filename(match.title_orig)
+            year = match.year
+            folder = f"{title} ({year})" if year else title
+            if item.kind == "movie":
+                # 电影特典：落到 Movies/<Movie> (year)/<extras>/，保留原文件名（即特典描述）
+                root = options.library_roots.get("movie")
+                if root:
+                    folder_path = os.path.join(root, folder, extras_type)
+                    dst = os.path.join(folder_path, os.path.basename(item.path))
+            else:
+                tv_type = classify_tv_type(match.genres)
+                root = options.library_roots.get(f"tv_{tv_type}") if tv_type else None
+                if root:
+                    folder_path = os.path.join(root, folder, extras_type)
+                    ext = os.path.splitext(item.path)[1]
+                    frag, seq, name = self._extras_parts(info)
+                    n = seq if seq else self._next_extras_number(folder_path, frag)
+                    new_name = f"{frag} {n:02d}"
+                    if name:
+                        new_name += f" {name}"
+                    new_name += ext
+                    dst = os.path.join(folder_path, new_name)
         if dst is None:  # custom 模式或无对应根目录：落到输出目录/源目录，保留原文件名
             base = options.output_dir or os.path.dirname(os.path.abspath(item.path))
             dst = os.path.join(base, os.path.basename(item.path))
@@ -656,24 +707,72 @@ class Processor:
 
     # ── 公共辅助 ──────────────────────────────────────────────────────────
 
-    def resolve_subgroup(self, raw: str, group_from_filename: Optional[str]) -> Optional[str]:
-        """字幕组识别回退链：本地库 → LLM → None（进手动队列）。
+    def resolve_subgroups(self, raw: str, group_from_filename: Optional[str]) -> List[str]:
+        """识别文件名中的多个组（如 ``Tigole-QxR`` / ``SweetSub&VCB-Studio``），
+        返回规范名列表。回退链：本地库 → LLM → []（进手动队列）。
 
-        返回规范名（``rename_to``）；识别不到且无 LLM 时返回 ``None``。
+        - 先按显式连接符（``&``/``×``/``/``）拆，再对每个子段尝试按 ``-``
+          拆出已知组；整段可识别（如 ``VCB-Studio``）则保留整段。
+        - 只保留能识别为已知组的片段；一个都识别不到且无 LLM 时返回空列表。
         """
-        key = self.subgroups.recognize(group_from_filename) or self.subgroups.recognize(raw)
-        if key:
-            name = self.subgroups.display_name(key)
-            logger.info("字幕组识别(本地库): %r -> %s", group_from_filename, name)
-            return name
+        candidates = self._split_group_candidates(group_from_filename)
+        if not candidates:
+            candidates = self._split_group_candidates(raw)
+        groups: List[str] = []
+        for cand in candidates:
+            key = self.subgroups.recognize(cand)
+            if key:
+                name = self.subgroups.display_name(key)
+                if name not in groups:
+                    groups.append(name)
+        if groups:
+            logger.info("字幕组识别(本地库): %r -> %s", group_from_filename, groups)
+            return groups
         if self.llm.available:
             result = self.llm.parse_subgroup(raw)
             if result:
                 self.subgroups.add(result["subgroup"], result["aliases"])
                 logger.info("字幕组识别(LLM): %s", result["subgroup"])
-                return result["subgroup"]
+                return [result["subgroup"]]
         logger.warning("字幕组识别失败: %r", raw)
-        return None
+        return []
+
+    def _split_group_candidates(self, frag: Optional[str]) -> List[str]:
+        """把组名片段拆成候选子片段（多组场景）。
+
+        先按 ``&``/``×``/``/`` 拆出显式多组；每个子段若整段精确等于已知组
+        （如 ``VCB-Studio``）保留整段，否则尝试按 ``-`` 拆出已知组（如
+        ``Tigole-QxR`` → ``Tigole`` + ``QxR``）。用整段精确匹配判断，避免
+        ``Tigole-QxR`` 被 ``Tigole``/``QxR`` 子串误判为单个已知组。
+        """
+        if not frag:
+            return []
+        parts = [p.strip() for p in re.split(r"[&×／/]", str(frag)) if p.strip()]
+        result: List[str] = []
+        for p in parts:
+            if self._is_known_group_exact(p):
+                result.append(p)
+                continue
+            sub = [s.strip() for s in re.split(r"-", p) if s.strip()]
+            if len(sub) > 1:
+                known = [s for s in sub if self._is_known_group_exact(s)]
+                if known:
+                    result.extend(known)
+                    continue
+            result.append(p)
+        return result
+
+    def _is_known_group_exact(self, frag: str) -> bool:
+        """整段（去标点后）是否精确等于某个已知组的 key/简称/别名。"""
+        n = _norm_group_name(frag)
+        if not n:
+            return False
+        for key, meta in self.subgroups.data["groups"].items():
+            rename_to = meta.get("rename_to") or key
+            for cand in (key, rename_to, *meta.get("aliases", [])):
+                if _norm_group_name(cand) == n:
+                    return True
+        return False
 
     def _base_values(self, info: MediaInfo, group: Optional[str],
                      match: Optional[MediaMatch]) -> Dict[str, object]:
