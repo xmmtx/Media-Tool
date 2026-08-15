@@ -250,6 +250,10 @@ class Processor:
         try:
             if self.is_subtitle(path):
                 return self._process_subtitle(item, options)
+            # 音频文件（如番剧文件夹里的 CD 音轨）无论拖到哪个页面都按音乐处理
+            if os.path.splitext(path)[1].lower() in AUDIO_EXTS:
+                item.kind = "music"
+                return self._process_music(item, options)
             if options.kind == "movie":
                 result = self._process_movie(item, options, forced_match, forced_group)
                 self._record_video(result)

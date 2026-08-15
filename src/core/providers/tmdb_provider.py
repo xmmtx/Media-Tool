@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -36,12 +37,24 @@ class TMDBProvider(BaseProvider):
 
     # ── 网络请求 ──────────────────────────────────────────────────────────
 
+    _TIMEOUT = 10
+    _RETRIES = 3
+
     def _request(self, path: str, params: dict) -> dict:
+        """请求 TMDB；网络抖动/SSL 握手超时自动重试（生产网络不稳）。"""
         params = dict(params)
         params["api_key"] = str(self._cfg("tmdb.api_key", "") or "")
         url = f"{TMDB_API}{path}?{urllib.parse.urlencode(params)}"
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        last: Exception = urllib.error.URLError("request failed")
+        for attempt in range(self._RETRIES):
+            try:
+                with urllib.request.urlopen(url, timeout=self._TIMEOUT) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except Exception as e:  # 握手/读取超时或瞬时失败 → 退避重试
+                last = e
+                if attempt < self._RETRIES - 1:
+                    time.sleep(0.5 * (attempt + 1))
+        raise last
 
     # ── 搜索 ──────────────────────────────────────────────────────────────
 

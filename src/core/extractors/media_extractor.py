@@ -42,9 +42,9 @@ _GROUP_RE = re.compile(r"[-\[(]\s*([^-\]()]+?)\s*[\]\s)]*$")
 # shorts / scenes / deleted scenes / interviews / samples / clips / extras
 # 顺序敏感：先匹配更具体的（如 special scene → scenes），后兜底到 extras。
 _EXTRAS_PATTERNS = [
-    (r"trailers?|teasers?|\bcm\b|\bpv\b|web[\s\-_]*preview|web[\s\-_]*预告|预告", "trailers"),
+    (r"trailers?|teasers?|\bcm\d*\b|\bpv\d*\b|web[\s\-_]*preview|web[\s\-_]*预告|预告", "trailers"),
     (r"behind\s+the\s+scenes|making\s+of|location\s+scouting|staff[\s\-_]*voice|"
-     r"cast[\s\-_]*voice|disc[\s\-_]*\d*[\s\-_]*menu|\bmenu\b|制作特辑|幕后|花絮", "behind the scenes"),
+     r"cast[\s\-_]*voice|disc[\s\-_]*\d*[\s\-_]*menu|\bmenu\d*\b|制作特辑|幕后|花絮", "behind the scenes"),
     (r"featurettes?|mini[\s\-_]*(?:drama|theater)|bd[\s\-_]*bonus|\bbonus\b|画集", "featurettes"),
     (r"shorts?|petit|spinoff|迷你|小剧场|短篇", "shorts"),
     (r"deleted\s+scen(?:e|es)|uncut|未放送|删减片段", "deleted scenes"),
@@ -52,7 +52,7 @@ _EXTRAS_PATTERNS = [
     (r"interviews?|cast[\s\-_]*(?:talk|interview)|stage[\s\-_]*greeting|舞台挨拶|采访", "interviews"),
     (r"samples?|试听|试看", "samples"),
     (r"clips?|短片|剪辑", "clips"),
-    (r"ncop|nced|\bop\b|\bed\b|\bsp\b|tokuten|特典|特别篇|特别编", "extras"),
+    (r"ncop|nced|\bop\d*\b|\bed\d*\b|\bsp\d*\b|tokuten|特典|特别篇|特别编", "extras"),
 ]
 
 
@@ -66,7 +66,8 @@ def _detect_extras(info: "MediaInfo", name: str) -> None:
         m = re.search(_pat, name, re.I)
         if m:
             info.extra["extras"] = label
-            info.extra["extras_frag"] = m.group().strip()
+            # 类型词去尾部数字（Menu01 → Menu），供特典命名使用
+            info.extra["extras_frag"] = re.sub(r"\d+$", "", m.group()).strip()
             return
 
 
@@ -348,7 +349,7 @@ def _regex_parse(name: str, fullname: str) -> MediaInfo:
         m = re.search(_pat, base, re.I)
         if m:
             info.extra["extras"] = label
-            info.extra["extras_frag"] = m.group().strip()
+            info.extra["extras_frag"] = re.sub(r"\d+$", "", m.group()).strip()
             used.append(m.group())
             break
 
