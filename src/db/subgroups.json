@@ -466,6 +466,233 @@
       "rename_to": "Tigole",
       "aliases": [],
       "added": "2026-08-15"
+    },
+    "BONE": {
+      "rename_to": "BONE",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "FraMeSToR": {
+      "rename_to": "FraMeSToR",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "D-Z0N3": {
+      "rename_to": "D-Z0N3",
+      "aliases": [
+        "DZ0N3"
+      ],
+      "added": "2026-08-15"
+    },
+    "NCmt": {
+      "rename_to": "NCmt",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "EthD": {
+      "rename_to": "EthD",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "Vyndros": {
+      "rename_to": "Vyndros",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "CMRG": {
+      "rename_to": "CMRG",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "TEPES": {
+      "rename_to": "TEPES",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "Cinefeel": {
+      "rename_to": "Cinefeel",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "Kitsune": {
+      "rename_to": "Kitsune",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "SWTYBLZ": {
+      "rename_to": "SWTYBLZ",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "MTeam": {
+      "rename_to": "MTeam",
+      "aliases": [
+        "M-Team"
+      ],
+      "added": "2026-08-15"
+    },
+    "SbR": {
+      "rename_to": "SbR",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "playBD": {
+      "rename_to": "playBD",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "BHDStudio": {
+      "rename_to": "BHDStudio",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "FGT": {
+      "rename_to": "FGT",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "eSc": {
+      "rename_to": "eSc",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "C4TV": {
+      "rename_to": "C4TV",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "decibeL": {
+      "rename_to": "decibeL",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "JUDAS": {
+      "rename_to": "JUDAS",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "KOGI": {
+      "rename_to": "KOGI",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "LOL": {
+      "rename_to": "LOL",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "NTG": {
+      "rename_to": "NTG",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "PEX": {
+      "rename_to": "PEX",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "SiC": {
+      "rename_to": "SiC",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "SPTH": {
+      "rename_to": "SPTH",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "TOMMY": {
+      "rename_to": "TOMMY",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "WAR": {
+      "rename_to": "WAR",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "HONE": {
+      "rename_to": "HONE",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "KiNGDOM": {
+      "rename_to": "KiNGDOM",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "PixelDance": {
+      "rename_to": "PixelDance",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "SAMURAI": {
+      "rename_to": "SAMURAI",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "ViSTA": {
+      "rename_to": "ViSTA",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "ZZZ": {
+      "rename_to": "ZZZ",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "TEAM": {
+      "rename_to": "TEAM",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "SPARKS": {
+      "rename_to": "SPARKS",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "WELP": {
+      "rename_to": "WELP",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "UTR": {
+      "rename_to": "UTR",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "HDSky": {
+      "rename_to": "HDSky",
+      "aliases": [
+        "HD-Sky"
+      ],
+      "added": "2026-08-15"
+    },
+    "HDWing": {
+      "rename_to": "HDWing",
+      "aliases": [
+        "HD-Wing"
+      ],
+      "added": "2026-08-15"
+    },
+    "BeAst": {
+      "rename_to": "BeAst",
+      "aliases": [],
+      "added": "2026-08-15"
+    },
+    "TJUPT": {
+      "rename_to": "TJUPT",
+      "aliases": [
+        "北洋园"
+      ],
+      "added": "2026-08-15"
+    },
+    "NYPT": {
+      "rename_to": "NYPT",
+      "aliases": [
+        "南洋"
+      ],
+      "added": "2026-08-15"
     }
   }
 }
