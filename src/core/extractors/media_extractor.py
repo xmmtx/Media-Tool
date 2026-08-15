@@ -16,6 +16,7 @@ expression_engine（格式化）消费。
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -25,6 +26,8 @@ import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional
+
+logger = logging.getLogger("core.extractors.media_extractor")
 
 # 文件名里常见的“季/集/分辨率/质量”片段，用于从 title 中剔除
 _YEAR_RE = re.compile(r"(?:19|20)\d{2}")
@@ -414,11 +417,16 @@ def _ffprobe_cmd() -> Optional[str]:
     """定位 ffprobe 可执行文件：先 PATH，其次 PyInstaller 打包同目录（捆绑的 ffprobe.exe）。"""
     found = shutil.which("ffprobe")
     if found:
+        logger.info("ffprobe 定位: PATH -> %s", found)
         return found
     if getattr(sys, "frozen", False):  # PyInstaller：exe 同目录可能捆绑了 ffprobe.exe
         local = os.path.join(os.path.dirname(sys.executable), "ffprobe.exe")
         if os.path.isfile(local):
+            logger.info("ffprobe 定位: 打包目录 -> %s", local)
             return local
+        logger.warning("ffprobe 定位: PATH 未找到，打包目录 %s 不存在", local)
+    else:
+        logger.warning("ffprobe 定位: PATH 未找到（开发模式，未打包）")
     return None
 
 
@@ -426,6 +434,7 @@ def probe_resolution(path: str, timeout: float = 5.0) -> Optional[str]:
     """用 ffprobe 读取第一个视频流的实际分辨率，如 ``1920x1080``。
 
     任何失败（ffprobe 不存在 / 文件不存在 / 非视频 / 超时）均返回 ``None``。
+    失败原因会写入日志（warning），便于生产环境排查。
     """
     ffprobe = _ffprobe_cmd()
     if not ffprobe:
@@ -443,18 +452,32 @@ def probe_resolution(path: str, timeout: float = 5.0) -> Optional[str]:
             timeout=timeout,
         )
         if result.returncode != 0:
+            stderr = (result.stderr or "").strip()[:300]
+            logger.warning("ffprobe 执行失败 rc=%s 文件=%s stderr=%s",
+                           result.returncode, path, stderr or "(空)")
             return None
-        data = json.loads(result.stdout)
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError as e:
+            logger.warning("ffprobe 输出解析失败 文件=%s 输出=%s 错误=%s",
+                           path, (result.stdout or "").strip()[:200], e)
+            return None
         streams = data.get("streams") or []
         if not streams:
+            logger.warning("ffprobe 无视频流 文件=%s（非视频或流选择失败）", path)
             return None
         width = streams[0].get("width")
         height = streams[0].get("height")
         if width and height:
+            logger.info("分辨率(ffprobe): %sx%s 文件=%s", width, height, path)
             return f"{width}x{height}"
-    except (FileNotFoundError, subprocess.SubprocessError, ValueError,
-            OSError, json.JSONDecodeError):
-        pass
+        logger.warning("ffprobe 流缺少宽高 文件=%s streams=%s", path, streams)
+    except subprocess.TimeoutExpired:
+        logger.warning("ffprobe 超时(%.0fs) 文件=%s", timeout, path)
+    except FileNotFoundError:
+        logger.warning("ffprobe 文件不存在: %s", ffprobe)
+    except OSError as e:
+        logger.warning("ffprobe 启动失败 %s 文件=%s", e, path)
     return None
 
 

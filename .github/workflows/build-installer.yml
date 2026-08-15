@@ -91,14 +91,33 @@ jobs:
       - name: Bundle ffprobe (resolution probe)
         shell: pwsh
         run: |
+          # 注意：choco 安装的 ffmpeg 在 choco\bin 下的是 0 字节 shim（靠同名
+          # .shim 元数据定位真实 exe），脱离 choco 环境无法运行。必须拷贝
+          # lib 目录里的真实 ffprobe.exe，不能用 Get-Command 命中的 shim。
           $src = $null
-          $ff = Get-Command ffprobe -ErrorAction SilentlyContinue
-          if ($ff) { $src = $ff.Source }
-          elseif (Test-Path "C:\ProgramData\chocolatey\bin\ffprobe.exe") {
-            $src = "C:\ProgramData\chocolatey\bin\ffprobe.exe"
+          $real = Get-ChildItem "C:\ProgramData\chocolatey\lib\ffmpeg" -Recurse `
+            -Filter "ffprobe.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Length -gt 0 } | Select-Object -First 1
+          if ($real) { $src = $real.FullName }
+          if (-not $src) {
+            $ff = Get-Command ffprobe -ErrorAction SilentlyContinue
+            if ($ff) {
+              # 兜底：若命中 0 字节 shim，尝试从 .shim 元数据解析真实路径
+              if ((Get-Item $ff.Source).Length -eq 0 -and (Test-Path "$($ff.Source).shim")) {
+                $m = Select-String -Path "$($ff.Source).shim" -Pattern 'path:(\S+)' |
+                  Select-Object -First 1
+                if ($m) { $src = $m.Matches[0].Groups[1].Value }
+              }
+              if (-not $src) { $src = $ff.Source }
+            }
           }
-          if ($src) {
+          if ($src -and (Test-Path $src)) {
             Copy-Item $src -Destination "dist\MediaTool\ffprobe.exe" -Force
+            # 校验：拷贝出来的必须能独立运行（shim 脱离 choco 会启动失败）
+            & "dist\MediaTool\ffprobe.exe" -version *> $null
+            if ($LASTEXITCODE -ne 0) {
+              throw "ffprobe.exe 无法独立运行（疑似拷贝了 chocolatey shim）: $src"
+            }
             Write-Host "ffprobe bundled from $src"
           } else {
             Write-Host "::warning::ffprobe not found - resolution probing disabled"
