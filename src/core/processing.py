@@ -50,6 +50,7 @@ except ImportError:  # src 作为 sys.path 根运行时
     from db.subgroup_store import normalize as _norm_group_name  # type: ignore
 from .extractors.media_extractor import (
     MediaInfo,
+    _EXTRAS_FOLDER_TYPES,
     extract_from_filename,
     probe_resolution,
 )
@@ -545,15 +546,23 @@ class Processor:
         return None
 
     def _movie_extras_match(self, item, options) -> Optional[MediaMatch]:
-        """电影特典：主片信息从路径上级文件夹解析（文件名通常不含片名）。
+        """电影特典：主片信息从路径中特典文件夹的上级目录解析（文件名通常不含片名）。
 
-        从文件所在目录逐级向上，取第一个能解析出标题的目录作为主片文件夹
-        （特典目录如 Featurettes 解析不出标题，自然跳过）。"""
+        从文件所在目录逐级向上，**跳过特典子文件夹**（featurettes/behind the scenes
+        等，它们也能被当标题解析），取第一个普通电影文件夹解析标题。"""
         d = os.path.dirname(os.path.abspath(item.path))
         info = None
         while True:
             parent = os.path.basename(d).strip()
             if parent:
+                norm = re.sub(r"[\s_\-]+", "", parent.lower())
+                if norm in _EXTRAS_FOLDER_TYPES:  # 特典目录：跳过，继续向上
+                    up = os.path.dirname(d)
+                    if up == d:
+                        info = None
+                        break
+                    d = up
+                    continue
                 info = extract_from_filename(parent)
                 if info and info.title:
                     break
