@@ -237,8 +237,10 @@ class MediaPage(QWidget):
         list_toolbar = QHBoxLayout()
         self.btn_remove_list = PushButton(self)
         self.btn_clear_list = PushButton(self)
+        self.btn_remove_completed = PushButton(self)
         self.btn_remove_list.clicked.connect(self._remove_selected)
         self.btn_clear_list.clicked.connect(self._clear)
+        self.btn_remove_completed.clicked.connect(self._remove_completed)
         self.status_filter = ComboBox(self)
         self.status_filter.currentIndexChanged.connect(self._apply_status_filter)
         self._filter_codes = ["all", "pending", "ok", "manual", "error"]
@@ -247,6 +249,7 @@ class MediaPage(QWidget):
                 self._t("filter_all" if _code == "all" else "st_" + _code))
         list_toolbar.addWidget(self.btn_remove_list)
         list_toolbar.addWidget(self.btn_clear_list)
+        list_toolbar.addWidget(self.btn_remove_completed)
         list_toolbar.addStretch()
         list_toolbar.addWidget(self.status_filter)
         card_lay.addLayout(list_toolbar)
@@ -384,6 +387,7 @@ class MediaPage(QWidget):
         self.btn_undo.setText(self._t("undo"))
         self.btn_remove_list.setText(self._t("btn_remove_list"))
         self.btn_clear_list.setText(self._t("clear_list"))
+        self.btn_remove_completed.setText(self._t("btn_remove_completed"))
         for _i, _code in enumerate(self._filter_codes):
             self.status_filter.setItemText(
                 _i, self._t("filter_all" if _code == "all" else "st_" + _code))
@@ -500,6 +504,26 @@ class MediaPage(QWidget):
         self._pending = [p for p in self._pending if p.path not in removed]
         self.btn_process.setEnabled(bool(self._pending))
         logger.info("移除 %d 个选中文件", len(rows))
+        self._update_drop_hint()
+
+    def _remove_completed(self) -> None:
+        """删除所有已完成（ok 状态）的行及其对应项。"""
+        rows = []
+        removed = set()
+        for r in range(self.table.rowCount()):
+            it = self.table.item(r, 2)
+            if it and it.data(Qt.ItemDataRole.UserRole) == "ok":
+                rows.append(r)
+                removed.add(self._paths[r])
+        for r in sorted(rows, reverse=True):
+            self.table.removeRow(r)
+            del self._paths[r]
+        self._pending = [p for p in self._pending if p.path not in removed]
+        self._manual_map = {p: m for p, m in self._manual_map.items()
+                            if p not in removed}
+        self.btn_process.setEnabled(bool(self._pending))
+        logger.info("删除 %d 个已完成文件", len(rows))
+        self.lbl_status.setText(self._t("status_ready", count=len(self._paths)))
         self._update_drop_hint()
 
     def _clear(self) -> None:
@@ -668,15 +692,20 @@ class MediaPage(QWidget):
         self.lbl_status.setText(self._t("manual_matched", count=matched))
 
     def _start_match(self) -> None:
-        """匹配阶段：dry_run 处理所有文件（只算目标名，不做文件操作）。"""
+        """匹配阶段：dry_run 处理（只算目标名，不做文件操作）。
+
+        再次点击时仅重新匹配失败/未处理项：已成功（ok）项跳过并保留在
+        ``_pending``（执行阶段与新增匹配项一起执行）。
+        """
         self._fallback_manual = False
-        paths = list(self._paths)
+        kept = [i for i in self._pending if i.status == "ok"]
+        self._pending = kept
+        paths = [p for p in self._paths if self._row_status(p) != "ok"]
         if not paths:
             QMessageBox.information(self, self._t("err_title"), self._t("err_no_files"))
             return
         logger.info("开始匹配 %d 个文件 (kind=%s)", len(paths), self.kind)
         self._phase = "match"
-        self._pending = []
         self.processor.reset_match_cache()  # 清空上一批视频匹配缓存
         options = self._options()
         options.dry_run = True
@@ -686,6 +715,17 @@ class MediaPage(QWidget):
         self._thread.progress.connect(self.progress.setValue)
         self._thread.finished_all.connect(self._on_all_done)
         self._thread.start()
+
+    def _row_status(self, path: str) -> str:
+        """按路径取该行状态（pending/ok/manual/error），供匹配跳过成功项。"""
+        try:
+            row = self._paths.index(path)
+        except ValueError:
+            return "pending"
+        it = self.table.item(row, 2)
+        if it is None:
+            return "pending"
+        return str(it.data(Qt.ItemDataRole.UserRole) or "pending")
 
     def _execute_pending(self) -> None:
         """执行阶段：对已匹配（pending）项执行真实文件操作。"""

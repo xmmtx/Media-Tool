@@ -7,6 +7,7 @@
   "clear_list": "Clear List",
   "filter_all": "All",
   "btn_remove_list": "Remove from list",
+  "btn_remove_completed": "Remove Completed",
   "process": "Process",
   "undo": "Undo",
   "cancel": "Cancel",

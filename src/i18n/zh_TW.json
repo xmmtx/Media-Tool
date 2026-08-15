@@ -7,6 +7,7 @@
   "clear_list": "清空清單",
   "filter_all": "全部",
   "btn_remove_list": "移出列表",
+  "btn_remove_completed": "刪除已完成",
   "process": "開始處理",
   "undo": "復原",
   "cancel": "取消",
