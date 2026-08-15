@@ -204,7 +204,7 @@ class Processor:
         self.llm = LlmSubgroupProvider(self.config)
         self.manual_store = manual_store if manual_store is not None else ManualQueueStore()
         self.manual_queue: List[QueueItem] = []
-        self._video_by_ep: Dict[tuple, QueueItem] = {}  # (season, episode) -> 已匹配视频
+        self._video_by_ep: Dict[tuple, List[QueueItem]] = {}  # (season, episode) -> 已匹配视频列表（跨番共存）
         self._extras_seq: Dict[tuple, int] = {}  # (目标目录, 视频名片段) -> 已分配序号
 
     @staticmethod
@@ -223,11 +223,14 @@ class Processor:
         self._extras_seq.clear()
 
     def _record_video(self, item: QueueItem) -> None:
-        """视频匹配成功后登记 (season, episode) → item，供字幕跟随。"""
+        """视频匹配成功后登记 (season, episode) → item，供字幕跟随。
+
+        同一 (季, 集) 可能有多部剧（跨番），存列表；字幕按文件名前缀精确选同番视频。"""
         if item.status == "ok" and item.info \
                 and item.info.season is not None and item.info.episode is not None \
                 and not (item.info.extra or {}).get("extras"):
-            self._video_by_ep[(item.info.season, item.info.episode)] = item
+            self._video_by_ep.setdefault(
+                (item.info.season, item.info.episode), []).append(item)
 
     # ── 对外入口 ──────────────────────────────────────────────────────────
 
@@ -490,7 +493,8 @@ class Processor:
                     info.title, info.season, info.episode)
         if info.season is None or info.episode is None:
             return self._to_manual(item, "cannot parse season/episode from subtitle")
-        video = self._video_by_ep.get((info.season, info.episode))
+        videos = self._video_by_ep.get((info.season, info.episode)) or []
+        video = self._pick_subtitle_video(item.path, videos)
         if video is None or not video.dst:
             return self._to_manual(item, "no matching video for subtitle")
         ext = os.path.splitext(item.path)[1]
@@ -512,6 +516,25 @@ class Processor:
             return item
         item.status = "ok"
         return item
+
+    @staticmethod
+    def _pick_subtitle_video(sub_path: str, videos: List[QueueItem]) -> Optional[QueueItem]:
+        """为字幕选同剧集的视频（跨番同 (季, 集) 时靠文件名前缀区分，不串番）。
+
+        字幕 ``xxx.scjp.ass`` 去扩展名后 = 视频 ``xxx.mkv`` 去扩展名 + 语言标签，
+        因此要求字幕 stem 以视频 stem 为前缀，且剩余尾部是合法语言标签。"""
+        sub_stem = os.path.splitext(os.path.basename(sub_path))[0]
+        for v in videos:
+            if not v or not v.path:
+                continue
+            video_stem = os.path.splitext(os.path.basename(v.path))[0]
+            if sub_stem == video_stem:
+                return v
+            if sub_stem.startswith(video_stem):
+                tail = sub_stem[len(video_stem):].lstrip(" .-_")
+                if not tail or tail.lower() in _SUBTITLE_LANG_NORM:
+                    return v
+        return None
 
     @staticmethod
     def _subtitle_lang_tag(sub_path: str, video_path: str) -> str:
