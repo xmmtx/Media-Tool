@@ -733,7 +733,12 @@ class Processor:
         return item
 
     def _apply_music_post(self, dst: str, artists: List[str], options: ProcessingOptions) -> None:
+        if not artists:
+            # 无艺术家可写回（如标签缺失）——跳过写回，绝不误删目标标签
+            logger.warning("音乐写回跳过 %s: 无拆分艺术家", dst)
+            return
         if not update_music_tags(dst, {"artist": artists}):
+            logger.warning("音乐标签写回失败 %s: artists=%s", dst, artists)
             return
         if options.inject_cover and options.cover_path and os.path.isfile(options.cover_path):
             if options.cover_path.lower().endswith((".jpg", ".jpeg", ".png")):
@@ -986,6 +991,16 @@ class Processor:
         """
         if item.status != "ok" or not item.dst:
             return item  # 未匹配或已执行
+        # 音乐：文件操作前先读源标签（rename 会移动源文件，之后再读会拿不到）
+        artists: Optional[List[str]] = None
+        if item.kind == "music":
+            try:
+                tags = read_music_tags(item.path)
+                artists = split_artists(
+                    tags.get("artist"),
+                    self.config.get("music.artist_separators", ""))
+            except Exception:
+                artists = None
         result = self._apply_op(item.path, item.dst, options.mode)
         if not result.ok:
             item.status = "error"
@@ -994,12 +1009,8 @@ class Processor:
                          item.path, item.dst, item.error)
             return item
         logger.info("文件操作 %s 成功: %s -> %s", options.mode, item.path, item.dst)
-        if item.kind == "music":
+        if artists:
             try:
-                tags = read_music_tags(item.path)
-                artists = split_artists(
-                    tags.get("artist"),
-                    self.config.get("music.artist_separators", ""))
                 self._apply_music_post(item.dst, artists, options)
             except Exception as e:
                 item.status = "error"
