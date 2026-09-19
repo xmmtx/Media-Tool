@@ -693,6 +693,16 @@
         "南洋"
       ],
       "added": "2026-08-15"
+    },
+    "Silence": {
+      "rename_to": "Silence",
+      "aliases": [],
+      "added": "2026-09-19"
+    },
+    "Lullozzo": {
+      "rename_to": "Lullozzo",
+      "aliases": [],
+      "added": "2026-09-19"
     }
   }
 }
