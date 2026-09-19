@@ -931,7 +931,7 @@ class Processor:
 
     # 媒体库模式文件名模板（Jellyfin 官方格式 + 更多影片信息）
     _LIBRARY_FORMATS = {
-        "movie": "{title_orig} ({year}) -[{group} {resolution}]",
+        "movie": "{title_orig} ({year}) - [{group} {resolution}]",
         "tv": "{title_orig} S{season_2d}E{episode_2d} {title_user} - [{group} {resolution}]",
         "music": "{artist} - {title}",
     }
